@@ -6,10 +6,10 @@ const {
 } = window.TabbitOrganizer;
 
 const STORAGE_KEY = "tabbit.sessions";
-const GROQ_SETTINGS_KEY = "tabbit.groqSettings";
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
-const GROQ_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
+const AI_SETTINGS_KEY = "tabbit.aiSettings";
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+const DEFAULT_AI_MODEL = "gpt-4.1-mini";
+const TAB_GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
 
 const DEFAULT_OPTIONS = {
   collapseGroups: false,
@@ -19,14 +19,14 @@ const DEFAULT_OPTIONS = {
 };
 
 const elements = {
+  aiApiKey: document.querySelector("#aiApiKey"),
+  aiContext: document.querySelector("#aiContext"),
+  aiModel: document.querySelector("#aiModel"),
   debugExportButton: document.querySelector("#debugExportButton"),
   dedupeButton: document.querySelector("#dedupeButton"),
   duplicateCount: document.querySelector("#duplicateCount"),
   groupCount: document.querySelector("#groupCount"),
   groupPreview: document.querySelector("#groupPreview"),
-  groqApiKey: document.querySelector("#groqApiKey"),
-  groqContext: document.querySelector("#groqContext"),
-  groqModel: document.querySelector("#groqModel"),
   organizeButton: document.querySelector("#organizeButton"),
   refreshButton: document.querySelector("#refreshButton"),
   saveSessionButton: document.querySelector("#saveSessionButton"),
@@ -51,7 +51,7 @@ const colorMap = {
 
 const state = {
   duplicatePlan: null,
-  groqSettings: null,
+  aiSettings: null,
   groupPlan: null,
   planSource: "local",
   sessions: [],
@@ -112,36 +112,36 @@ async function setSessions(sessions) {
   await chrome.storage.local.set({ [STORAGE_KEY]: sessions });
 }
 
-async function getStoredGroqSettings() {
-  const result = await chrome.storage.local.get(GROQ_SETTINGS_KEY);
-  const settings = result[GROQ_SETTINGS_KEY] || {};
+async function getStoredAiSettings() {
+  const result = await chrome.storage.local.get(AI_SETTINGS_KEY);
+  const settings = result[AI_SETTINGS_KEY] || {};
 
   return {
     apiKey: typeof settings.apiKey === "string" ? settings.apiKey : "",
-    model: typeof settings.model === "string" && settings.model.trim() ? settings.model : DEFAULT_GROQ_MODEL,
+    model: typeof settings.model === "string" && settings.model.trim() ? settings.model : DEFAULT_AI_MODEL,
     context: typeof settings.context === "string" ? settings.context : ""
   };
 }
 
-function readGroqSettingsFromForm() {
-  const typedApiKey = elements.groqApiKey.value.trim();
-  const storedApiKey = state.groqSettings?.apiKey || "";
-  const typedModel = elements.groqModel.value.trim();
-  const typedContext = elements.groqContext.value;
+function readAiSettingsFromForm() {
+  const typedApiKey = elements.aiApiKey.value.trim();
+  const storedApiKey = state.aiSettings?.apiKey || "";
+  const typedModel = elements.aiModel.value.trim();
+  const typedContext = elements.aiContext.value;
 
   return {
     apiKey: typedApiKey || storedApiKey,
-    model: typedModel || DEFAULT_GROQ_MODEL,
+    model: typedModel || DEFAULT_AI_MODEL,
     context: typedContext.trim().slice(0, 600)
   };
 }
 
-async function saveGroqSettings() {
-  const previousHadKey = Boolean(state.groqSettings?.apiKey);
-  const nextSettings = readGroqSettingsFromForm();
-  state.groqSettings = nextSettings;
-  await chrome.storage.local.set({ [GROQ_SETTINGS_KEY]: nextSettings });
-  renderGroqSettings(nextSettings);
+async function saveAiSettings() {
+  const previousHadKey = Boolean(state.aiSettings?.apiKey);
+  const nextSettings = readAiSettingsFromForm();
+  state.aiSettings = nextSettings;
+  await chrome.storage.local.set({ [AI_SETTINGS_KEY]: nextSettings });
+  renderAiSettings(nextSettings);
 
   const hasKey = Boolean(nextSettings.apiKey);
   setKeyState(hasKey);
@@ -151,16 +151,16 @@ async function saveGroqSettings() {
   }
 }
 
-function renderGroqSettings(settings) {
-  elements.groqModel.value = settings.model || DEFAULT_GROQ_MODEL;
-  elements.groqContext.value = settings.context || "";
-  elements.groqApiKey.value = "";
-  elements.groqApiKey.placeholder = settings.apiKey ? "Saved locally" : "gsk_...";
+function renderAiSettings(settings) {
+  elements.aiModel.value = settings.model || DEFAULT_AI_MODEL;
+  elements.aiContext.value = settings.context || "";
+  elements.aiApiKey.value = "";
+  elements.aiApiKey.placeholder = settings.apiKey ? "Saved locally" : "sk-...";
 }
 
-async function loadGroqSettings() {
-  state.groqSettings = await getStoredGroqSettings();
-  renderGroqSettings(state.groqSettings);
+async function loadAiSettings() {
+  state.aiSettings = await getStoredAiSettings();
+  renderAiSettings(state.aiSettings);
 }
 
 function tabSubtitle(tabs) {
@@ -267,7 +267,7 @@ function safeText(value, maxLength) {
   return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 3).trim()}...` : cleaned;
 }
 
-function buildGroqMessages(tabs, options, settings) {
+function buildAiMessages(tabs, options, settings) {
   const aiTabs = tabs
     .filter((tab) => window.TabbitOrganizer.isGroupableTab(tab, options))
     .map((tab) => ({
@@ -283,14 +283,15 @@ function buildGroqMessages(tabs, options, settings) {
     "You organize Chrome tabs into useful native tab groups.",
     "Return only a valid JSON object.",
     "Use this exact shape: {\"groups\":[{\"title\":\"short name\",\"color\":\"blue\",\"tabIds\":[1,2]}]}.",
-    `Allowed colors: ${GROQ_COLORS.join(", ")}.`,
+    `Allowed colors: ${TAB_GROUP_COLORS.join(", ")}.`,
     "Use only tab IDs from the input. Put each tab ID in at most one group.",
     "Keep titles under 24 characters. One or two words is ideal.",
     "Create as many cohesive groups as you can — prefer many specific groups over a few broad buckets.",
     "Any 2+ tabs sharing a clear theme should form a group; do not force unrelated tabs together.",
     "Do NOT include localhost / 127.0.0.1 / 0.0.0.0 tabs in any group — they are handled separately and must not appear in your output.",
     "Recognize developer patterns: group cloud consoles and monitoring tools (AWS, GCP, Datadog, Grafana, Sentry, CloudWatch) as 'Infra'; group internal company subdomains (any private/non-public domain a user mentions) under that company's name.",
-    "Combine AI assistants (ChatGPT, Claude, Gemini, Perplexity) and search engines into a single 'AI & Search' group only when there are too few of each to stand alone; otherwise keep them separate.",
+    "Distinguish AI assistants you talk to (ChatGPT, Claude, Gemini, Perplexity) from AI products/dashboards you build with (Retell AI, Vapi, ElevenLabs, OpenAI platform): treat the latter as work tools belonging with the user's company / project group, not as assistants.",
+    "Combine AI assistants and general web search into 'AI & Search' only when each has too few tabs to stand alone.",
     "Combine comms tools (Slack, Gmail, Linear, Notion, Discord) into 'Comms' or 'Work' unless one cluster dominates."
   ];
 
@@ -310,11 +311,11 @@ function buildGroqMessages(tabs, options, settings) {
   ];
 }
 
-function parseGroqJsonContent(content) {
+function parseAiJsonContent(content) {
   const trimmed = String(content || "").trim();
 
   if (!trimmed) {
-    throw new Error("Groq returned an empty response");
+    throw new Error("AI returned an empty response");
   }
 
   try {
@@ -323,15 +324,15 @@ function parseGroqJsonContent(content) {
     const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
 
     if (!jsonMatch) {
-      throw new Error("Groq did not return JSON");
+      throw new Error("AI did not return JSON");
     }
 
     return JSON.parse(jsonMatch[0]);
   }
 }
 
-async function requestGroqGroups(tabs, settings, options) {
-  const messages = buildGroqMessages(tabs, options, settings);
+async function requestAiGroups(tabs, settings, options) {
+  const messages = buildAiMessages(tabs, options, settings);
   const requestBody = {
     max_tokens: 4096,
     messages,
@@ -340,7 +341,7 @@ async function requestGroqGroups(tabs, settings, options) {
     temperature: 0.2
   };
 
-  const response = await fetch(GROQ_API_URL, {
+  const response = await fetch(OPENAI_API_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${settings.apiKey}`,
@@ -359,11 +360,11 @@ async function requestGroqGroups(tabs, settings, options) {
       status: response.status,
       error: payload.error?.message || `HTTP ${response.status}`
     };
-    throw new Error(payload.error?.message || `Groq request failed with HTTP ${response.status}`);
+    throw new Error(payload.error?.message || `OpenAI request failed with HTTP ${response.status}`);
   }
 
   const content = payload.choices?.[0]?.message?.content;
-  const parsed = parseGroqJsonContent(content);
+  const parsed = parseAiJsonContent(content);
 
   state.aiDebug = {
     timestamp: new Date().toISOString(),
@@ -375,7 +376,7 @@ async function requestGroqGroups(tabs, settings, options) {
   };
 
   if (!Array.isArray(parsed.groups)) {
-    throw new Error("Groq JSON did not include a groups array");
+    throw new Error("AI JSON did not include a groups array");
   }
 
   return parsed.groups;
@@ -401,8 +402,8 @@ async function refreshLocal() {
   }
 }
 
-async function _buildGroqPlanInner() {
-  const settings = readGroqSettingsFromForm();
+async function _buildAiPlanInner() {
+  const settings = readAiSettingsFromForm();
 
   if (!settings.apiKey) {
     setStatus("Need key", "warn");
@@ -416,12 +417,12 @@ async function _buildGroqPlanInner() {
   try {
     state.tabs = await getTabs();
     const options = getOptions();
-    const aiGroups = await requestGroqGroups(state.tabs, settings, options);
+    const aiGroups = await requestAiGroups(state.tabs, settings, options);
     state.groupPlan = buildGroupingPlanFromAiGroups(state.tabs, aiGroups, options);
-    state.planSource = "groq";
+    state.planSource = "openai";
     state.duplicatePlan = findDuplicateTabs(state.tabs, options);
     state.sessions = await getSessions();
-    state.groqSettings = settings;
+    state.aiSettings = settings;
     renderPlan();
     renderSessions();
     setStatus("AI plan");
@@ -441,12 +442,12 @@ async function _buildGroqPlanInner() {
   }
 }
 
-async function buildGroqPlan() {
+async function buildAiPlan() {
   if (state.aiPending) {
     return state.aiPending;
   }
 
-  state.aiPending = _buildGroqPlanInner();
+  state.aiPending = _buildAiPlanInner();
 
   try {
     return await state.aiPending;
@@ -456,16 +457,16 @@ async function buildGroqPlan() {
 }
 
 async function refresh() {
-  if (state.groqSettings?.apiKey) {
-    await buildGroqPlan();
+  if (state.aiSettings?.apiKey) {
+    await buildAiPlan();
   } else {
     await refreshLocal();
   }
 }
 
 async function organizeTabs() {
-  if (state.planSource !== "groq") {
-    const didBuildAiPlan = await buildGroqPlan();
+  if (state.planSource !== "openai") {
+    const didBuildAiPlan = await buildAiPlan();
 
     if (!didBuildAiPlan) {
       return;
@@ -654,10 +655,10 @@ function buildDebugSnapshot() {
     planSource: state.planSource,
     options: getOptions(),
     settings: {
-      model: state.groqSettings?.model || null,
-      hasApiKey: Boolean(state.groqSettings?.apiKey),
-      contextLength: (state.groqSettings?.context || "").length,
-      context: state.groqSettings?.context || ""
+      model: state.aiSettings?.model || null,
+      hasApiKey: Boolean(state.aiSettings?.apiKey),
+      contextLength: (state.aiSettings?.context || "").length,
+      context: state.aiSettings?.context || ""
     },
     tabs: state.tabs.map((tab) => ({
       id: tab.id,
@@ -722,9 +723,9 @@ function bindEvents() {
   elements.saveSessionButton.addEventListener("click", saveSession);
   elements.debugExportButton.addEventListener("click", exportDebugSnapshot);
 
-  elements.groqApiKey.addEventListener("change", saveGroqSettings);
-  elements.groqModel.addEventListener("change", saveGroqSettings);
-  elements.groqContext.addEventListener("change", saveGroqSettings);
+  elements.aiApiKey.addEventListener("change", saveAiSettings);
+  elements.aiModel.addEventListener("change", saveAiSettings);
+  elements.aiContext.addEventListener("change", saveAiSettings);
 
   elements.sessionList.addEventListener("click", (event) => {
     const button = event.target.closest("[data-session-action]");
@@ -746,8 +747,8 @@ function bindEvents() {
 
 async function init() {
   bindEvents();
-  await loadGroqSettings();
-  setKeyState(Boolean(state.groqSettings?.apiKey));
+  await loadAiSettings();
+  setKeyState(Boolean(state.aiSettings?.apiKey));
   state.sessions = await getSessions();
   renderSessions();
   await refresh();
