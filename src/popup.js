@@ -334,11 +334,10 @@ function parseAiJsonContent(content) {
 async function requestAiGroups(tabs, settings, options) {
   const messages = buildAiMessages(tabs, options, settings);
   const requestBody = {
-    max_tokens: 4096,
+    max_completion_tokens: 4096,
     messages,
     model: settings.model,
-    response_format: { type: "json_object" },
-    temperature: 0.2
+    response_format: { type: "json_object" }
   };
 
   const response = await fetch(OPENAI_API_URL, {
