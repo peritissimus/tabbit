@@ -92,6 +92,32 @@ test("always groups localhost tabs even with a single tab", () => {
   assert.equal(localGroup.color, "cyan");
 });
 
+test("preserves AI singletons (AI decides when a single tab deserves its own group)", () => {
+  const tabs = [
+    tab({ id: 1, title: "Vapi dashboard", url: "https://dashboard.vapi.ai/", windowId: 1 }),
+    tab({ id: 2, title: "Repo", url: "https://github.com/org/repo", windowId: 1 }),
+    tab({ id: 3, title: "PR #1", url: "https://github.com/org/repo/pull/1", windowId: 1 }),
+    tab({ id: 4, title: "YouTube", url: "https://www.youtube.com/watch?v=abc", windowId: 1 })
+  ];
+
+  const plan = buildGroupingPlanFromAiGroups(
+    tabs,
+    [
+      { color: "purple", tabIds: [1], title: "Vapi" },
+      { color: "grey", tabIds: [2, 3], title: "Code" },
+      { color: "red", tabIds: [4], title: "YouTube" }
+    ],
+    { minGroupSize: 2 }
+  );
+
+  assert.equal(plan.groups.length, 3);
+  const titles = plan.groups.map((group) => group.title);
+  assert.ok(titles.includes("Vapi"));
+  assert.ok(titles.includes("YouTube"));
+  const vapi = plan.groups.find((group) => group.title === "Vapi");
+  assert.deepEqual(vapi.tabs.map((item) => item.id), [1]);
+});
+
 test("localhost override applies to AI plans too, regardless of where AI placed it", () => {
   const tabs = [
     tab({ id: 1, title: "Dev", url: "http://127.0.0.1:3000", windowId: 1 }),

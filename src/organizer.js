@@ -326,7 +326,10 @@
   }
 
   function buildGroupingPlanFromAiGroups(tabs, aiGroups, options = {}) {
-    const minGroupSize = Math.max(2, Number(options.minGroupSize || 2));
+    // We trust the AI's judgement on when to break a tab into its own group
+    // (singletons), so we don't apply the minGroupSize floor here. The local
+    // heuristic in buildGroupingPlan still enforces it because that path
+    // categorizes by domain and would over-fragment otherwise.
     const { localhostTabs, remainingTabs } = partitionLocalhostTabs(tabs, options);
     const localhostTabIds = new Set(localhostTabs.map((tab) => tab.id));
     const localhostGroups = buildLocalhostGroups(localhostTabs);
@@ -377,7 +380,7 @@
       }
     }
 
-    const aiOutputGroups = buckets.filter((group) => group.tabs.length >= minGroupSize);
+    const aiOutputGroups = buckets.filter((group) => group.tabs.length >= 1);
 
     const groups = [...localhostGroups, ...aiOutputGroups].sort((left, right) => {
       const firstTabLeft = left.tabs[0];
