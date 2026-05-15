@@ -6,6 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "check": "node --check src/organizer.js && node --check src/popup.js",
+    "icons": "node scripts/generate-icons.js",
     "test": "node --test tests/*.test.js",
     "validate": "node -e \"JSON.parse(require('node:fs').readFileSync('manifest.json', 'utf8'))\" && npm run check && npm test"
   }
