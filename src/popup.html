@@ -28,25 +28,38 @@
         </div>
       </section>
 
-      <section class="surface ai-surface" aria-label="AI">
-        <div class="welcome-note">
-          <h2>Organize tabs with AI</h2>
-          <p>Tabbit uses OpenAI to group your tabs into clusters. Add your API key to start.</p>
-          <a class="welcome-link" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">Get an API key →</a>
-        </div>
-        <div class="ai-fields">
-          <label class="field api-key-field">
-            <span>OpenAI API key</span>
-            <input id="aiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
-          </label>
-          <label class="field">
-            <span>Model</span>
-            <input id="aiModel" type="text" autocomplete="off" />
-          </label>
-          <label class="field context-field">
-            <span>Context</span>
-            <textarea id="aiContext" rows="2" autocomplete="off" placeholder="e.g. dev at Zoca; AWS infra, localhost, *.mononest.dev internal tools, Slack/Linear, ChatGPT/Claude"></textarea>
-          </label>
+      <section class="surface ai-surface" aria-label="AI" data-expanded="no">
+        <button id="aiToggle" class="ai-toggle" type="button" aria-expanded="false" aria-controls="aiBody">
+          <span class="ai-toggle-left">
+            <span class="ai-toggle-title">Setup</span>
+            <span id="aiSummary" class="ai-summary"></span>
+          </span>
+          <span class="ai-toggle-chevron" aria-hidden="true">
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+        </button>
+
+        <div id="aiBody" class="ai-body">
+          <div class="welcome-note">
+            <p>Tabbit uses OpenAI to group your tabs into clusters. Add your API key to start.</p>
+            <a class="welcome-link" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">Get an API key →</a>
+          </div>
+          <div class="ai-fields">
+            <label class="field api-key-field">
+              <span>OpenAI API key</span>
+              <input id="aiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+            </label>
+            <label class="field">
+              <span>Model</span>
+              <input id="aiModel" type="text" autocomplete="off" />
+            </label>
+            <label class="field context-field">
+              <span>Context</span>
+              <textarea id="aiContext" rows="2" autocomplete="off" placeholder="e.g. dev at Zoca; AWS infra, localhost, *.mononest.dev internal tools, Slack/Linear, ChatGPT/Claude"></textarea>
+            </label>
+          </div>
         </div>
       </section>
 

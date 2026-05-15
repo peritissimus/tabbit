@@ -7,6 +7,7 @@ const {
 
 const STORAGE_KEY = "tabbit.sessions";
 const AI_SETTINGS_KEY = "tabbit.aiSettings";
+const UI_STATE_KEY = "tabbit.uiState";
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_AI_MODEL = "gpt-5.4-nano";
 const TAB_GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
@@ -20,8 +21,12 @@ const DEFAULT_OPTIONS = {
 
 const elements = {
   aiApiKey: document.querySelector("#aiApiKey"),
+  aiBody: document.querySelector("#aiBody"),
   aiContext: document.querySelector("#aiContext"),
   aiModel: document.querySelector("#aiModel"),
+  aiSummary: document.querySelector("#aiSummary"),
+  aiSurface: document.querySelector(".ai-surface"),
+  aiToggle: document.querySelector("#aiToggle"),
   debugExportButton: document.querySelector("#debugExportButton"),
   dedupeButton: document.querySelector("#dedupeButton"),
   duplicateCount: document.querySelector("#duplicateCount"),
@@ -62,6 +67,32 @@ const state = {
 
 function setKeyState(hasKey) {
   document.body.dataset.hasKey = hasKey ? "yes" : "no";
+}
+
+function renderAiSummary() {
+  const model = state.aiSettings?.model || DEFAULT_AI_MODEL;
+  const context = (state.aiSettings?.context || "").trim();
+  const trimmedContext = context.length > 36 ? `${context.slice(0, 35).trim()}…` : context;
+  elements.aiSummary.textContent = trimmedContext ? `${model} · ${trimmedContext}` : model;
+}
+
+function setAiExpanded(expanded, { persist = true } = {}) {
+  const value = expanded ? "yes" : "no";
+  elements.aiSurface.dataset.expanded = value;
+  elements.aiToggle.setAttribute("aria-expanded", String(expanded));
+
+  if (persist) {
+    chrome.storage.local.set({ [UI_STATE_KEY]: { aiExpanded: expanded } }).catch(() => {});
+  }
+}
+
+async function getStoredUiState() {
+  try {
+    const result = await chrome.storage.local.get(UI_STATE_KEY);
+    return result[UI_STATE_KEY] || {};
+  } catch (_error) {
+    return {};
+  }
 }
 
 function setBusy(isBusy) {
@@ -147,6 +178,7 @@ async function saveAiSettings() {
   setKeyState(hasKey);
 
   if (hasKey && !previousHadKey) {
+    setAiExpanded(false);
     await refresh();
   }
 }
@@ -156,6 +188,7 @@ function renderAiSettings(settings) {
   elements.aiContext.value = settings.context || "";
   elements.aiApiKey.value = "";
   elements.aiApiKey.placeholder = settings.apiKey ? "Saved locally" : "sk-...";
+  renderAiSummary();
 }
 
 async function loadAiSettings() {
@@ -726,6 +759,14 @@ function bindEvents() {
   elements.aiModel.addEventListener("change", saveAiSettings);
   elements.aiContext.addEventListener("change", saveAiSettings);
 
+  elements.aiToggle.addEventListener("click", () => {
+    if (document.body.dataset.hasKey !== "yes") {
+      return;
+    }
+    const expanded = elements.aiSurface.dataset.expanded === "yes";
+    setAiExpanded(!expanded);
+  });
+
   elements.sessionList.addEventListener("click", (event) => {
     const button = event.target.closest("[data-session-action]");
 
@@ -747,7 +788,12 @@ function bindEvents() {
 async function init() {
   bindEvents();
   await loadAiSettings();
-  setKeyState(Boolean(state.aiSettings?.apiKey));
+  const hasKey = Boolean(state.aiSettings?.apiKey);
+  setKeyState(hasKey);
+
+  const uiState = await getStoredUiState();
+  setAiExpanded(hasKey ? Boolean(uiState.aiExpanded) : true, { persist: false });
+
   state.sessions = await getSessions();
   renderSessions();
   await refresh();
