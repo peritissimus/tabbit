@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tabbit</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <p class="eyebrow">Tabbit</p>
+        <div id="statusPill" class="status-pill" role="status">Ready</div>
+      </header>
+
+      <section class="metrics" aria-label="Tab summary">
+        <div class="metric">
+          <span id="tabCount" class="metric-value">0</span>
+          <span class="metric-label">Tabs</span>
+        </div>
+        <div class="metric">
+          <span id="groupCount" class="metric-value">0</span>
+          <span class="metric-label">Groups</span>
+        </div>
+        <div class="metric">
+          <span id="duplicateCount" class="metric-value">0</span>
+          <span class="metric-label">Dupes</span>
+        </div>
+      </section>
+
+      <section class="surface ai-surface" aria-label="Groq">
+        <div class="welcome-note">
+          <h2>Organize tabs with AI</h2>
+          <p>Tabbit uses Groq to group your tabs into clusters. Add your API key to start.</p>
+          <a class="welcome-link" href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Get a free key →</a>
+        </div>
+        <div class="ai-fields">
+          <label class="field api-key-field">
+            <span>Groq API key</span>
+            <input id="groqApiKey" type="password" autocomplete="off" placeholder="gsk_..." />
+          </label>
+          <label class="field">
+            <span>Model</span>
+            <input id="groqModel" type="text" autocomplete="off" />
+          </label>
+          <label class="field context-field">
+            <span>Context</span>
+            <textarea id="groqContext" rows="2" autocomplete="off" placeholder="e.g. dev at Zoca; AWS infra, localhost, *.mononest.dev internal tools, Slack/Linear, ChatGPT/Claude"></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section class="actions">
+        <button id="organizeButton" class="button button-primary" type="button">Organize</button>
+        <div class="actions-secondary">
+          <button id="dedupeButton" class="button" type="button">Dedupe</button>
+          <button id="ungroupButton" class="button" type="button">Ungroup</button>
+          <button id="saveSessionButton" class="button" type="button">Save</button>
+        </div>
+      </section>
+
+      <section class="surface" aria-labelledby="planHeading">
+        <div class="section-head">
+          <h2 id="planHeading">Plan</h2>
+          <button id="refreshButton" class="ghost-button" type="button">Refresh</button>
+        </div>
+        <div id="groupPreview" class="preview-list" aria-live="polite"></div>
+      </section>
+
+      <section class="surface" aria-labelledby="sessionsHeading">
+        <div class="section-head">
+          <h2 id="sessionsHeading">Sessions</h2>
+          <span id="sessionCount" class="subtle-count">0 saved</span>
+        </div>
+        <div id="sessionList" class="session-list" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <script src="./organizer.js"></script>
+    <script src="./popup.js"></script>
+  </body>
+</html>

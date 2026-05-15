@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Tabbit",
+  "description": "Organize Chrome tabs into native tab groups, close exact duplicates, and save tab sessions.",
+  "version": "0.1.0",
+  "minimum_chrome_version": "90",
+  "permissions": ["tabs", "tabGroups", "storage"],
+  "host_permissions": ["https://api.groq.com/*"],
+  "action": {
+    "default_title": "Tabbit",
+    "default_popup": "src/popup.html"
+  }
+}

@@ -1,0 +1,644 @@
+const {
+  TAB_GROUP_ID_NONE,
+  buildGroupingPlanFromAiGroups,
+  buildGroupingPlan,
+  findDuplicateTabs
+} = window.TabbitOrganizer;
+
+const STORAGE_KEY = "tabbit.sessions";
+const GROQ_SETTINGS_KEY = "tabbit.groqSettings";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
+
+const DEFAULT_OPTIONS = {
+  collapseGroups: false,
+  currentWindowOnly: true,
+  includePinned: false,
+  minGroupSize: 2
+};
+
+const elements = {
+  dedupeButton: document.querySelector("#dedupeButton"),
+  duplicateCount: document.querySelector("#duplicateCount"),
+  groupCount: document.querySelector("#groupCount"),
+  groupPreview: document.querySelector("#groupPreview"),
+  groqApiKey: document.querySelector("#groqApiKey"),
+  groqContext: document.querySelector("#groqContext"),
+  groqModel: document.querySelector("#groqModel"),
+  organizeButton: document.querySelector("#organizeButton"),
+  refreshButton: document.querySelector("#refreshButton"),
+  saveSessionButton: document.querySelector("#saveSessionButton"),
+  sessionCount: document.querySelector("#sessionCount"),
+  sessionList: document.querySelector("#sessionList"),
+  statusPill: document.querySelector("#statusPill"),
+  tabCount: document.querySelector("#tabCount"),
+  ungroupButton: document.querySelector("#ungroupButton")
+};
+
+const colorMap = {
+  blue: "#2f80ed",
+  cyan: "#27a7b8",
+  green: "#219653",
+  grey: "#7b8794",
+  orange: "#f2994a",
+  pink: "#eb5791",
+  purple: "#9b51e0",
+  red: "#eb5757",
+  yellow: "#d9a400"
+};
+
+const state = {
+  duplicatePlan: null,
+  groqSettings: null,
+  groupPlan: null,
+  planSource: "local",
+  sessions: [],
+  tabs: [],
+  aiPending: null
+};
+
+function setKeyState(hasKey) {
+  document.body.dataset.hasKey = hasKey ? "yes" : "no";
+}
+
+function setBusy(isBusy) {
+  for (const button of [
+    elements.dedupeButton,
+    elements.organizeButton,
+    elements.refreshButton,
+    elements.saveSessionButton,
+    elements.ungroupButton
+  ]) {
+    button.disabled = isBusy;
+  }
+}
+
+function setStatus(message, tone = "default") {
+  elements.statusPill.textContent = message;
+
+  if (tone === "default") {
+    elements.statusPill.removeAttribute("data-tone");
+    return;
+  }
+
+  elements.statusPill.dataset.tone = tone;
+}
+
+function formatTime(timestamp) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(timestamp));
+}
+
+function getOptions() {
+  return { ...DEFAULT_OPTIONS };
+}
+
+async function getTabs() {
+  return chrome.tabs.query({ currentWindow: true });
+}
+
+async function getSessions() {
+  const result = await chrome.storage.local.get(STORAGE_KEY);
+  return Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+}
+
+async function setSessions(sessions) {
+  state.sessions = sessions;
+  await chrome.storage.local.set({ [STORAGE_KEY]: sessions });
+}
+
+async function getStoredGroqSettings() {
+  const result = await chrome.storage.local.get(GROQ_SETTINGS_KEY);
+  const settings = result[GROQ_SETTINGS_KEY] || {};
+
+  return {
+    apiKey: typeof settings.apiKey === "string" ? settings.apiKey : "",
+    model: typeof settings.model === "string" && settings.model.trim() ? settings.model : DEFAULT_GROQ_MODEL,
+    context: typeof settings.context === "string" ? settings.context : ""
+  };
+}
+
+function readGroqSettingsFromForm() {
+  const typedApiKey = elements.groqApiKey.value.trim();
+  const storedApiKey = state.groqSettings?.apiKey || "";
+  const typedModel = elements.groqModel.value.trim();
+  const typedContext = elements.groqContext.value;
+
+  return {
+    apiKey: typedApiKey || storedApiKey,
+    model: typedModel || DEFAULT_GROQ_MODEL,
+    context: typedContext.trim().slice(0, 600)
+  };
+}
+
+async function saveGroqSettings() {
+  const previousHadKey = Boolean(state.groqSettings?.apiKey);
+  const nextSettings = readGroqSettingsFromForm();
+  state.groqSettings = nextSettings;
+  await chrome.storage.local.set({ [GROQ_SETTINGS_KEY]: nextSettings });
+  renderGroqSettings(nextSettings);
+
+  const hasKey = Boolean(nextSettings.apiKey);
+  setKeyState(hasKey);
+
+  if (hasKey && !previousHadKey) {
+    await refresh();
+  }
+}
+
+function renderGroqSettings(settings) {
+  elements.groqModel.value = settings.model || DEFAULT_GROQ_MODEL;
+  elements.groqContext.value = settings.context || "";
+  elements.groqApiKey.value = "";
+  elements.groqApiKey.placeholder = settings.apiKey ? "Saved locally" : "gsk_...";
+}
+
+async function loadGroqSettings() {
+  state.groqSettings = await getStoredGroqSettings();
+  renderGroqSettings(state.groqSettings);
+}
+
+function tabSubtitle(tabs) {
+  return tabs
+    .slice(0, 3)
+    .map((tab) => tab.title || tab.url)
+    .join(" | ");
+}
+
+function renderPlanLoading() {
+  elements.groupPreview.innerHTML = `
+    <div class="group-row skeleton"><span class="skel-line skel-line-a"></span></div>
+    <div class="group-row skeleton"><span class="skel-line skel-line-b"></span></div>
+    <div class="group-row skeleton"><span class="skel-line skel-line-c"></span></div>
+  `;
+}
+
+function renderPlan() {
+  const { groups = [] } = state.groupPlan || {};
+
+  elements.tabCount.textContent = String(state.tabs.length);
+  elements.groupCount.textContent = String(groups.length);
+  elements.duplicateCount.textContent = String(state.duplicatePlan?.removableTabs.length || 0);
+
+  if (groups.length === 0) {
+    elements.groupPreview.innerHTML =
+      '<div class="empty">No groupable clusters yet.</div>';
+    return;
+  }
+
+  elements.groupPreview.innerHTML = groups
+    .map((group) => {
+      const dotColor = colorMap[group.color] || colorMap.grey;
+      return `
+        <article class="group-row">
+          <div class="row-main">
+            <div class="title-wrap">
+              <span class="color-dot" style="background: ${dotColor}"></span>
+              <span class="row-title">${escapeHtml(group.title)}</span>
+            </div>
+            <span class="row-count">${group.tabs.length} tabs</span>
+          </div>
+          <div class="row-detail">${escapeHtml(tabSubtitle(group.tabs))}</div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderSessions() {
+  const count = state.sessions.length;
+  elements.sessionCount.textContent = `${count} saved`;
+
+  if (count === 0) {
+    elements.sessionList.innerHTML = '<div class="empty">Saved sessions will show up here.</div>';
+    return;
+  }
+
+  elements.sessionList.innerHTML = state.sessions
+    .map(
+      (session) => `
+        <article class="session-row">
+          <div class="row-main">
+            <span class="row-title">${escapeHtml(session.name)}</span>
+            <span class="row-count">${session.tabs.length} tabs</span>
+          </div>
+          <div class="row-detail">${escapeHtml(formatTime(session.createdAt))}</div>
+          <div class="session-actions">
+            <button class="session-action" data-session-action="restore" data-session-id="${session.id}" type="button">
+              Restore
+            </button>
+            <button class="session-action" data-session-action="delete" data-session-id="${session.id}" type="button">
+              Delete
+            </button>
+          </div>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function safeUrlForAi(url) {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    parsed.search = "";
+    return parsed.toString();
+  } catch (_error) {
+    return String(url || "").slice(0, 300);
+  }
+}
+
+function safeText(value, maxLength) {
+  const cleaned = String(value || "").replace(/\s+/g, " ").trim();
+  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 3).trim()}...` : cleaned;
+}
+
+function buildGroqMessages(tabs, options, settings) {
+  const aiTabs = tabs
+    .filter((tab) => window.TabbitOrganizer.isGroupableTab(tab, options))
+    .map((tab) => ({
+      id: tab.id,
+      title: safeText(tab.title || "", 160),
+      url: safeUrlForAi(tab.url),
+      windowId: tab.windowId
+    }));
+
+  const userContext = String(settings?.context || "").trim();
+
+  const systemLines = [
+    "You organize Chrome tabs into useful native tab groups.",
+    "Return only a valid JSON object.",
+    "Use this exact shape: {\"groups\":[{\"title\":\"short name\",\"color\":\"blue\",\"tabIds\":[1,2]}]}.",
+    `Allowed colors: ${GROQ_COLORS.join(", ")}.`,
+    "Use only tab IDs from the input. Put each tab ID in at most one group.",
+    "Keep titles under 24 characters. One or two words is ideal.",
+    "Create as many cohesive groups as you can — prefer many specific groups over a few broad buckets.",
+    "Any 2+ tabs sharing a clear theme should form a group; do not force unrelated tabs together.",
+    "Do NOT include localhost / 127.0.0.1 / 0.0.0.0 tabs in any group — they are handled separately and must not appear in your output.",
+    "Recognize developer patterns: group cloud consoles and monitoring tools (AWS, GCP, Datadog, Grafana, Sentry, CloudWatch) as 'Infra'; group internal company subdomains (any private/non-public domain a user mentions) under that company's name.",
+    "Combine AI assistants (ChatGPT, Claude, Gemini, Perplexity) and search engines into a single 'AI & Search' group only when there are too few of each to stand alone; otherwise keep them separate.",
+    "Combine comms tools (Slack, Gmail, Linear, Notion, Discord) into 'Comms' or 'Work' unless one cluster dominates."
+  ];
+
+  if (userContext) {
+    systemLines.push(`User context (use to inform group titles and patterns): ${userContext}`);
+  }
+
+  return [
+    { role: "system", content: systemLines.join(" ") },
+    {
+      role: "user",
+      content: JSON.stringify({
+        minGroupSize: options.minGroupSize,
+        tabs: aiTabs
+      })
+    }
+  ];
+}
+
+function parseGroqJsonContent(content) {
+  const trimmed = String(content || "").trim();
+
+  if (!trimmed) {
+    throw new Error("Groq returned an empty response");
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch (_error) {
+    const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      throw new Error("Groq did not return JSON");
+    }
+
+    return JSON.parse(jsonMatch[0]);
+  }
+}
+
+async function requestGroqGroups(tabs, settings, options) {
+  const response = await fetch(GROQ_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${settings.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      max_tokens: 4096,
+      messages: buildGroqMessages(tabs, options, settings),
+      model: settings.model,
+      response_format: { type: "json_object" },
+      temperature: 0.2
+    })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error?.message || `Groq request failed with HTTP ${response.status}`);
+  }
+
+  const content = payload.choices?.[0]?.message?.content;
+  const parsed = parseGroqJsonContent(content);
+
+  if (!Array.isArray(parsed.groups)) {
+    throw new Error("Groq JSON did not include a groups array");
+  }
+
+  return parsed.groups;
+}
+
+async function refreshLocal() {
+  setBusy(true);
+
+  try {
+    state.tabs = await getTabs();
+    state.groupPlan = buildGroupingPlan(state.tabs, getOptions());
+    state.planSource = "local";
+    state.duplicatePlan = findDuplicateTabs(state.tabs, getOptions());
+    state.sessions = await getSessions();
+    renderPlan();
+    renderSessions();
+    setStatus("Ready");
+  } catch (error) {
+    setStatus("Error", "error");
+    console.error(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function _buildGroqPlanInner() {
+  const settings = readGroqSettingsFromForm();
+
+  if (!settings.apiKey) {
+    setStatus("Need key", "warn");
+    return false;
+  }
+
+  setBusy(true);
+  setStatus("Asking AI");
+  renderPlanLoading();
+
+  try {
+    state.tabs = await getTabs();
+    const options = getOptions();
+    const aiGroups = await requestGroqGroups(state.tabs, settings, options);
+    state.groupPlan = buildGroupingPlanFromAiGroups(state.tabs, aiGroups, options);
+    state.planSource = "groq";
+    state.duplicatePlan = findDuplicateTabs(state.tabs, options);
+    state.sessions = await getSessions();
+    state.groqSettings = settings;
+    renderPlan();
+    renderSessions();
+    setStatus("AI plan");
+    return true;
+  } catch (error) {
+    state.groupPlan = buildGroupingPlan(state.tabs, getOptions());
+    state.planSource = "local";
+    state.duplicatePlan = findDuplicateTabs(state.tabs, getOptions());
+    state.sessions = await getSessions();
+    renderPlan();
+    renderSessions();
+    setStatus("AI failed", "error");
+    console.error(error);
+    return false;
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function buildGroqPlan() {
+  if (state.aiPending) {
+    return state.aiPending;
+  }
+
+  state.aiPending = _buildGroqPlanInner();
+
+  try {
+    return await state.aiPending;
+  } finally {
+    state.aiPending = null;
+  }
+}
+
+async function refresh() {
+  if (state.groqSettings?.apiKey) {
+    await buildGroqPlan();
+  } else {
+    await refreshLocal();
+  }
+}
+
+async function organizeTabs() {
+  if (state.planSource !== "groq") {
+    const didBuildAiPlan = await buildGroqPlan();
+
+    if (!didBuildAiPlan) {
+      return;
+    }
+  }
+
+  const groups = state.groupPlan?.groups || [];
+
+  if (groups.length === 0) {
+    setStatus("No groups", "warn");
+    return;
+  }
+
+  setBusy(true);
+
+  try {
+    for (const group of groups) {
+      const tabIds = group.tabs.map((tab) => tab.id);
+      const groupId = await chrome.tabs.group({
+        createProperties: { windowId: group.windowId },
+        tabIds
+      });
+
+      await chrome.tabGroups.update(groupId, {
+        collapsed: getOptions().collapseGroups,
+        color: group.color,
+        title: group.title
+      });
+    }
+
+    setStatus("Organized");
+    await refresh();
+  } catch (error) {
+    setStatus("Failed", "error");
+    console.error(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function closeDuplicateTabs() {
+  if (!state.duplicatePlan) {
+    await refresh();
+  }
+
+  const removableIds = state.duplicatePlan?.removableTabs.map((tab) => tab.id) || [];
+
+  if (removableIds.length === 0) {
+    setStatus("No dupes", "warn");
+    return;
+  }
+
+  setBusy(true);
+
+  try {
+    await chrome.tabs.remove(removableIds);
+    setStatus(`Closed ${removableIds.length}`);
+    await refresh();
+  } catch (error) {
+    setStatus("Failed", "error");
+    console.error(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function ungroupTabs() {
+  await refresh();
+
+  const options = getOptions();
+  const groupedTabIds = state.tabs
+    .filter((tab) => tab.groupId !== TAB_GROUP_ID_NONE)
+    .filter((tab) => options.includePinned || !tab.pinned)
+    .map((tab) => tab.id);
+
+  if (groupedTabIds.length === 0) {
+    setStatus("No groups", "warn");
+    return;
+  }
+
+  setBusy(true);
+
+  try {
+    await chrome.tabs.ungroup(groupedTabIds);
+    setStatus("Ungrouped");
+    await refresh();
+  } catch (error) {
+    setStatus("Failed", "error");
+    console.error(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function saveSession() {
+  await refresh();
+
+  const tabs = state.tabs
+    .filter((tab) => tab.url && !tab.url.startsWith("chrome://"))
+    .map((tab) => ({
+      title: tab.title || tab.url,
+      url: tab.url
+    }));
+
+  if (tabs.length === 0) {
+    setStatus("No tabs", "warn");
+    return;
+  }
+
+  const createdAt = Date.now();
+  const nextSession = {
+    id: crypto.randomUUID(),
+    createdAt,
+    name: `Session ${formatTime(createdAt)}`,
+    tabs
+  };
+
+  const nextSessions = [nextSession, ...state.sessions].slice(0, 20);
+  await setSessions(nextSessions);
+  renderSessions();
+  setStatus("Saved");
+}
+
+async function restoreSession(sessionId) {
+  const session = state.sessions.find((item) => item.id === sessionId);
+
+  if (!session) {
+    setStatus("Missing", "error");
+    return;
+  }
+
+  const urls = session.tabs.map((tab) => tab.url).filter(Boolean);
+
+  if (urls.length === 0) {
+    setStatus("Empty", "warn");
+    return;
+  }
+
+  setBusy(true);
+
+  try {
+    await chrome.windows.create({ focused: true, url: urls });
+    setStatus("Restored");
+  } catch (error) {
+    setStatus("Failed", "error");
+    console.error(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function deleteSession(sessionId) {
+  const nextSessions = state.sessions.filter((session) => session.id !== sessionId);
+  await setSessions(nextSessions);
+  renderSessions();
+  setStatus("Deleted");
+}
+
+function bindEvents() {
+  elements.organizeButton.addEventListener("click", organizeTabs);
+  elements.dedupeButton.addEventListener("click", closeDuplicateTabs);
+  elements.ungroupButton.addEventListener("click", ungroupTabs);
+  elements.refreshButton.addEventListener("click", refresh);
+  elements.saveSessionButton.addEventListener("click", saveSession);
+
+  elements.groqApiKey.addEventListener("change", saveGroqSettings);
+  elements.groqModel.addEventListener("change", saveGroqSettings);
+  elements.groqContext.addEventListener("change", saveGroqSettings);
+
+  elements.sessionList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-session-action]");
+
+    if (!button) {
+      return;
+    }
+
+    const sessionId = button.dataset.sessionId;
+
+    if (button.dataset.sessionAction === "restore") {
+      restoreSession(sessionId);
+      return;
+    }
+
+    deleteSession(sessionId);
+  });
+}
+
+async function init() {
+  bindEvents();
+  await loadGroqSettings();
+  setKeyState(Boolean(state.groqSettings?.apiKey));
+  state.sessions = await getSessions();
+  renderSessions();
+  await refresh();
+}
+
+init();
