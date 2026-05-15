@@ -38,7 +38,7 @@ Tabbit needs an OpenAI API key. Get one at [platform.openai.com/api-keys](https:
 | Field | Default | Purpose |
 | --- | --- | --- |
 | OpenAI API key | — | Required. Stored in `chrome.storage.local`. |
-| Model | `gpt-5.5` | Any OpenAI chat model id. Set to `gpt-4o-mini` / `gpt-4.1-mini` for cheaper runs. |
+| Model | `gpt-5.4-nano` | Any OpenAI chat model id. Try `gpt-5.5` for higher quality, or `gpt-4o-mini` / `gpt-4.1-mini` for cheaper runs. |
 | Context | — | Free-form text appended to the AI's system prompt to steer group naming. |
 
 Defaults baked into the code (no UI controls): current window only, min group size 2, pinned tabs ignored, groups created uncollapsed.

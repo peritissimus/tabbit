@@ -8,7 +8,7 @@ const {
 const STORAGE_KEY = "tabbit.sessions";
 const AI_SETTINGS_KEY = "tabbit.aiSettings";
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const DEFAULT_AI_MODEL = "gpt-5.5";
+const DEFAULT_AI_MODEL = "gpt-5.4-nano";
 const TAB_GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
 
 const DEFAULT_OPTIONS = {
