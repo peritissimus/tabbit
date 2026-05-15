@@ -23,15 +23,15 @@ const TARGET_SIZES = [16, 32, 48, 128];
 const MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
 
 const PROMPT = [
-  "A premium Chrome extension icon for an app called 'Tabbit', a minimal tab organizer.",
-  "Show a single bold letter 'T' centered in a softly-rounded square tile.",
-  "Letter style: geometric sans-serif similar to Inter or Söhne, weight ~600, slightly modern.",
-  "Letter color: warm off-white (#ededed).",
-  "Background: deep near-black (#0d0d0d), perfectly flat, no gradient or texture.",
-  "Generous padding (about 18% of canvas) around the letter so it reads clearly at 16x16.",
-  "No shadow, no glow, no stroke, no extra ornamentation — purely minimal.",
-  "Aesthetic reference: Linear app icon, Raycast app icon, Vercel logo mark.",
-  "Square 1:1 composition, sharp edges, ultra-clean, high contrast, dark mode."
+  "A premium Chrome extension app icon for 'Tabbit', a tab manager.",
+  "Centered subject: a clean, iconic silhouette of a rabbit's head in side profile, inspired by the classic Playboy bunny silhouette aesthetic but more modern and minimal.",
+  "The rabbit has two tall vertical ears pointing straight up. The tips of the ears are softly rounded — subtly evoking the rounded tops of browser tabs.",
+  "The rabbit wears a tiny refined bowtie under the chin as a nod to the original.",
+  "Render purely as a solid silhouette in warm off-white (#ededed) with no outlines, no shading, no gradients, no text.",
+  "Background: perfectly flat deep near-black (#0d0d0d), filling a softly rounded square tile.",
+  "Generous padding around the silhouette (about 16% of canvas on each side) so it reads cleanly at 16x16.",
+  "Aesthetic reference: Linear, Raycast, Vercel app-icon style — sharp geometry, high contrast, ultra-clean, dark mode.",
+  "Square 1:1 composition, 1024x1024."
 ].join(" ");
 
 async function generateMaster() {
