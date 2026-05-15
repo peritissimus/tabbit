@@ -62,7 +62,10 @@
       <section class="surface" aria-labelledby="planHeading">
         <div class="section-head">
           <h2 id="planHeading">Plan</h2>
-          <button id="refreshButton" class="ghost-button" type="button">Refresh</button>
+          <div class="head-actions">
+            <button id="debugExportButton" class="ghost-button" type="button" title="Download a JSON snapshot of tabs, plan, and AI debug data">Export</button>
+            <button id="refreshButton" class="ghost-button" type="button">Refresh</button>
+          </div>
         </div>
         <div id="groupPreview" class="preview-list" aria-live="polite"></div>
       </section>

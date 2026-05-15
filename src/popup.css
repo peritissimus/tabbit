@@ -208,6 +208,12 @@ h2 {
   flex-direction: column;
 }
 
+.section-head .head-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+}
+
 /* ---------- Forms ---------- */
 .option-grid,
 .ai-grid,

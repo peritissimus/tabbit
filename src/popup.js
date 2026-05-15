@@ -19,6 +19,7 @@ const DEFAULT_OPTIONS = {
 };
 
 const elements = {
+  debugExportButton: document.querySelector("#debugExportButton"),
   dedupeButton: document.querySelector("#dedupeButton"),
   duplicateCount: document.querySelector("#duplicateCount"),
   groupCount: document.querySelector("#groupCount"),
@@ -55,7 +56,8 @@ const state = {
   planSource: "local",
   sessions: [],
   tabs: [],
-  aiPending: null
+  aiPending: null,
+  aiDebug: null
 };
 
 function setKeyState(hasKey) {
@@ -329,29 +331,48 @@ function parseGroqJsonContent(content) {
 }
 
 async function requestGroqGroups(tabs, settings, options) {
+  const messages = buildGroqMessages(tabs, options, settings);
+  const requestBody = {
+    max_tokens: 4096,
+    messages,
+    model: settings.model,
+    response_format: { type: "json_object" },
+    temperature: 0.2
+  };
+
   const response = await fetch(GROQ_API_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${settings.apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      max_tokens: 4096,
-      messages: buildGroqMessages(tabs, options, settings),
-      model: settings.model,
-      response_format: { type: "json_object" },
-      temperature: 0.2
-    })
+    body: JSON.stringify(requestBody)
   });
 
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok || payload.error) {
+    state.aiDebug = {
+      timestamp: new Date().toISOString(),
+      request: requestBody,
+      response: payload,
+      status: response.status,
+      error: payload.error?.message || `HTTP ${response.status}`
+    };
     throw new Error(payload.error?.message || `Groq request failed with HTTP ${response.status}`);
   }
 
   const content = payload.choices?.[0]?.message?.content;
   const parsed = parseGroqJsonContent(content);
+
+  state.aiDebug = {
+    timestamp: new Date().toISOString(),
+    request: requestBody,
+    response: payload,
+    status: response.status,
+    rawContent: content,
+    parsed
+  };
 
   if (!Array.isArray(parsed.groups)) {
     throw new Error("Groq JSON did not include a groups array");
@@ -596,6 +617,96 @@ async function restoreSession(sessionId) {
   }
 }
 
+function buildDebugSnapshot() {
+  const groupPlan = state.groupPlan
+    ? {
+        groups: (state.groupPlan.groups || []).map((group) => ({
+          title: group.title,
+          color: group.color,
+          windowId: group.windowId,
+          reasons: group.reasons,
+          tabIds: (group.tabs || []).map((tab) => tab.id),
+          tabs: (group.tabs || []).map((tab) => ({
+            id: tab.id,
+            title: tab.title,
+            url: tab.url
+          }))
+        })),
+        skippedCount: state.groupPlan.skippedCount,
+        groupableCount: state.groupPlan.groupableCount
+      }
+    : null;
+
+  const duplicatePlan = state.duplicatePlan
+    ? {
+        removableCount: state.duplicatePlan.removableTabs.length,
+        duplicateSets: state.duplicatePlan.duplicateSets.map((set) => ({
+          url: set.url,
+          keeperId: set.keeper?.id,
+          removableIds: set.removableTabs.map((tab) => tab.id),
+          totalTabs: set.tabs.length
+        }))
+      }
+    : null;
+
+  return {
+    exportedAt: new Date().toISOString(),
+    planSource: state.planSource,
+    options: getOptions(),
+    settings: {
+      model: state.groqSettings?.model || null,
+      hasApiKey: Boolean(state.groqSettings?.apiKey),
+      contextLength: (state.groqSettings?.context || "").length,
+      context: state.groqSettings?.context || ""
+    },
+    tabs: state.tabs.map((tab) => ({
+      id: tab.id,
+      title: tab.title,
+      url: tab.url,
+      windowId: tab.windowId,
+      groupId: tab.groupId,
+      pinned: tab.pinned,
+      active: tab.active,
+      index: tab.index
+    })),
+    groupPlan,
+    duplicatePlan,
+    sessionCount: state.sessions.length,
+    aiDebug: state.aiDebug
+  };
+}
+
+function downloadJson(payload, filename) {
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function exportDebugSnapshot() {
+  try {
+    const snapshot = buildDebugSnapshot();
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    downloadJson(snapshot, `tabbit-debug-${stamp}.json`);
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2));
+      setStatus("Exported + copied");
+    } catch (_clipboardError) {
+      setStatus("Exported");
+    }
+  } catch (error) {
+    setStatus("Export failed", "error");
+    console.error(error);
+  }
+}
+
 async function deleteSession(sessionId) {
   const nextSessions = state.sessions.filter((session) => session.id !== sessionId);
   await setSessions(nextSessions);
@@ -609,6 +720,7 @@ function bindEvents() {
   elements.ungroupButton.addEventListener("click", ungroupTabs);
   elements.refreshButton.addEventListener("click", refresh);
   elements.saveSessionButton.addEventListener("click", saveSession);
+  elements.debugExportButton.addEventListener("click", exportDebugSnapshot);
 
   elements.groqApiKey.addEventListener("change", saveGroqSettings);
   elements.groqModel.addEventListener("change", saveGroqSettings);
