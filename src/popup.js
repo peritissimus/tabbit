@@ -34,6 +34,7 @@ const elements = {
   groupPreview: document.querySelector("#groupPreview"),
   organizeButton: document.querySelector("#organizeButton"),
   refreshButton: document.querySelector("#refreshButton"),
+  reorganizeButton: document.querySelector("#reorganizeButton"),
   saveSessionButton: document.querySelector("#saveSessionButton"),
   sessionCount: document.querySelector("#sessionCount"),
   sessionList: document.querySelector("#sessionList"),
@@ -100,6 +101,7 @@ function setBusy(isBusy) {
     elements.dedupeButton,
     elements.organizeButton,
     elements.refreshButton,
+    elements.reorganizeButton,
     elements.saveSessionButton,
     elements.ungroupButton
   ]) {
@@ -496,15 +498,7 @@ async function refresh() {
   }
 }
 
-async function organizeTabs() {
-  if (state.planSource !== "openai") {
-    const didBuildAiPlan = await buildAiPlan();
-
-    if (!didBuildAiPlan) {
-      return;
-    }
-  }
-
+async function applyGroupPlan({ ungroupFirst, successStatus }) {
   const groups = state.groupPlan?.groups || [];
 
   if (groups.length === 0) {
@@ -515,6 +509,18 @@ async function organizeTabs() {
   setBusy(true);
 
   try {
+    if (ungroupFirst) {
+      const options = getOptions();
+      const groupedTabIds = state.tabs
+        .filter((tab) => tab.groupId !== TAB_GROUP_ID_NONE)
+        .filter((tab) => options.includePinned || !tab.pinned)
+        .map((tab) => tab.id);
+
+      if (groupedTabIds.length > 0) {
+        await chrome.tabs.ungroup(groupedTabIds);
+      }
+    }
+
     for (const group of groups) {
       const tabIds = group.tabs.map((tab) => tab.id);
       const groupId = await chrome.tabs.group({
@@ -529,7 +535,7 @@ async function organizeTabs() {
       });
     }
 
-    setStatus("Organized");
+    setStatus(successStatus);
     await refresh();
   } catch (error) {
     setStatus("Failed", "error");
@@ -537,6 +543,29 @@ async function organizeTabs() {
   } finally {
     setBusy(false);
   }
+}
+
+async function organizeTabs() {
+  if (state.planSource !== "openai") {
+    const didBuildAiPlan = await buildAiPlan();
+
+    if (!didBuildAiPlan) {
+      return;
+    }
+  }
+
+  await applyGroupPlan({ ungroupFirst: false, successStatus: "Organized" });
+}
+
+async function reorganizeTabs() {
+  state.planSource = "local";
+  const didBuildAiPlan = await buildAiPlan();
+
+  if (!didBuildAiPlan) {
+    return;
+  }
+
+  await applyGroupPlan({ ungroupFirst: true, successStatus: "Reorganized" });
 }
 
 async function closeDuplicateTabs() {
@@ -749,6 +778,7 @@ async function deleteSession(sessionId) {
 
 function bindEvents() {
   elements.organizeButton.addEventListener("click", organizeTabs);
+  elements.reorganizeButton.addEventListener("click", reorganizeTabs);
   elements.dedupeButton.addEventListener("click", closeDuplicateTabs);
   elements.ungroupButton.addEventListener("click", ungroupTabs);
   elements.refreshButton.addEventListener("click", refresh);
