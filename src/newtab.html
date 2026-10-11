@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>New Tab</title>
+    <link rel="stylesheet" href="./newtab.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="top">
+        <div class="top-copy">
+          <p class="eyebrow">Tabbit</p>
+          <h1 id="greeting"></h1>
+          <p id="dateLine" class="date-line"></p>
+        </div>
+
+
+      </header>
+
+      <div class="search-wrap">
+      <input
+        id="search"
+        class="search"
+        type="search"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="Find a tab, revisit a page, or search the web"
+        aria-label="Jump to an open tab or recent page"
+      />
+
+      <button id="clearSearch" class="clear-search" type="button" aria-label="Clear search" hidden>Clear</button>
+      <kbd class="search-shortcut" aria-hidden="true">/</kbd>
+      </div>
+
+      <section id="results" class="results" aria-live="polite" hidden></section>
+
+      <div id="board" class="board">
+        <section aria-labelledby="quickHeading">
+          <div class="section-head">
+            <h2 id="quickHeading">Your shortcuts</h2>
+            <button id="editShortcuts" class="ghost-button" type="button">Edit shortcuts</button>
+          </div>
+          <div id="quickLinks" class="quick-links"></div>
+        </section>
+
+        <section aria-labelledby="localHeading">
+          <div class="section-head">
+            <h2 id="localHeading">Dev servers</h2>
+          </div>
+          <div id="localServers" class="server-list"></div>
+          <details id="otherServers" class="other-servers" hidden>
+            <summary id="otherServersSummary">Other servers</summary>
+            <div id="otherServerList" class="server-list"></div>
+          </details>
+        </section>
+
+        <section class="brief-section" aria-labelledby="briefHeading">
+          <div class="section-head">
+            <h2 id="briefHeading">At a glance</h2>
+            <div class="head-actions">
+              <span id="briefStatus" class="subtle-count"></span>
+              <button id="briefButton" class="ghost-button" type="button">Build</button>
+            </div>
+          </div>
+          <div id="brief" aria-live="polite"></div>
+        </section>
+
+        <details class="workspace-directory">
+          <summary class="directory-summary">All work links <span id="frequentCount" class="subtle-count"></span></summary>
+          <div id="frequent" class="card-grid"></div>
+        </details>
+
+        <details class="workspace-directory">
+          <summary class="directory-summary">Open tabs</summary>
+          <div id="openGroups" class="card-grid"></div>
+        </details>
+
+        <details class="workspace-directory">
+          <summary class="directory-summary">Saved sessions <span id="sessionCount" class="subtle-count">0 saved</span></summary>
+          <div id="sessionList" class="card-grid"></div>
+        </details>
+      </div>
+    </main>
+
+    <dialog id="shortcutDialog" aria-labelledby="shortcutDialogTitle">
+      <form id="shortcutForm">
+        <header class="editor-header">
+          <div><h2 id="shortcutDialogTitle">Edit shortcuts</h2><p>Keep your everyday destinations in a familiar order.</p></div>
+          <button id="closeShortcuts" class="icon-button" type="button" aria-label="Close shortcut editor">×</button>
+        </header>
+        <div id="shortcutRows" class="shortcut-rows"></div>
+        <div class="editor-add">
+          <button id="addShortcut" class="ghost-button" type="button">Add shortcut</button>
+          <label for="shortcutSuggestion">Or add a visited site</label>
+          <select id="shortcutSuggestion"><option value="">Choose a site…</option></select>
+        </div>
+        <p id="shortcutError" class="editor-error" role="alert"></p>
+        <footer class="editor-footer">
+          <span id="shortcutCount" class="subtle-count"></span>
+          <button id="cancelShortcuts" class="ghost-button" type="button">Cancel</button>
+          <button id="saveShortcuts" class="primary-button" type="submit">Save shortcuts</button>
+        </footer>
+      </form>
+    </dialog>
+    <script src="./newtab-settings.js"></script>
+    <script src="./ai-config.js"></script>
+    <script src="./organizer.js"></script>
+    <script src="./workspace.js"></script>
+    <script src="./newtab.js"></script>
+  </body>
+</html>

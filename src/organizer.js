@@ -7,6 +7,7 @@
   root.TabbitOrganizer = factory();
 })(typeof self !== "undefined" ? self : this, function createOrganizer() {
   const TAB_GROUP_ID_NONE = -1;
+  const DEFAULT_UNUSED_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
   const URL_TRACKING_PARAMS = [
     "fbclid",
     "gclid",
@@ -473,12 +474,35 @@
     };
   }
 
+  function findUnusedTabs(tabs, options = {}) {
+    const now = Number.isFinite(options.now) ? options.now : Date.now();
+    const unusedAfterMs = Number.isFinite(options.unusedAfterMs)
+      ? Math.max(0, options.unusedAfterMs)
+      : DEFAULT_UNUSED_AFTER_MS;
+    const cutoff = now - unusedAfterMs;
+
+    return [...tabs]
+      .filter((tab) => {
+        if (!tab || typeof tab.id !== "number" || tab.active || tab.audible) {
+          return false;
+        }
+
+        if (tab.pinned && !options.includePinned) {
+          return false;
+        }
+
+        return Number.isFinite(tab.lastAccessed) && tab.lastAccessed < cutoff;
+      })
+      .sort(compareTabsByWindowAndIndex);
+  }
+
   return {
     TAB_GROUP_ID_NONE,
     buildGroupingPlanFromAiGroups,
     buildGroupingPlan,
     categorizeTab,
     findDuplicateTabs,
+    findUnusedTabs,
     isGroupableTab,
     isLocalhostTab,
     normalizeGroupColor,

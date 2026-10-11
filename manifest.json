@@ -1,11 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Tabbit",
-  "description": "Organize Chrome tabs into native tab groups, close exact duplicates, and save tab sessions.",
+  "description": "Organize Chrome tabs, close duplicates and unused tabs, save tab sessions, and open new tabs on a work dashboard.",
   "version": "0.1.0",
-  "minimum_chrome_version": "90",
-  "permissions": ["tabs", "tabGroups", "storage"],
-  "host_permissions": ["https://api.openai.com/*"],
+  "minimum_chrome_version": "121",
+  "permissions": ["tabs", "tabGroups", "storage", "history", "favicon", "search", "scripting", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "chrome_url_overrides": {
+    "newtab": "src/newtab.html"
+  },
   "icons": {
     "16": "icons/icon-light-16.png",
     "32": "icons/icon-light-32.png",

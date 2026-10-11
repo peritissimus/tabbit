@@ -155,7 +155,7 @@ h2 {
 /* ---------- Metrics ---------- */
 .metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
   padding: 0 20px 20px;
 }
@@ -235,7 +235,7 @@ h2 {
 .actions-secondary {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .api-key-field {
@@ -568,7 +568,7 @@ body[data-has-key="no"] .hero {
 .button:active,
 .ghost-button:active,
 .session-action:active {
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
 
 .button {

@@ -6,6 +6,7 @@ const {
   buildGroupingPlan,
   categorizeTab,
   findDuplicateTabs,
+  findUnusedTabs,
   normalizeUrlForDuplicate
 } = require("../src/organizer");
 
@@ -203,4 +204,31 @@ test("finds duplicates while keeping active or pinned tabs", () => {
   );
   assert.equal(duplicates.duplicateSets[0].keeper.id, 2);
   assert.equal(duplicates.duplicateSets[1].keeper.id, 3);
+});
+
+test("finds tabs unused for seven days while protecting important tabs", () => {
+  const day = 24 * 60 * 60 * 1000;
+  const now = 20 * day;
+  const tabs = [
+    tab({ id: 1, lastAccessed: now - 8 * day, url: "https://old.example.com" }),
+    tab({ id: 2, lastAccessed: now - 6 * day, url: "https://recent.example.com" }),
+    tab({ active: true, id: 3, lastAccessed: now - 10 * day, url: "https://active.example.com" }),
+    tab({ id: 4, lastAccessed: now - 10 * day, pinned: true, url: "https://pinned.example.com" }),
+    tab({ audible: true, id: 5, lastAccessed: now - 10 * day, url: "https://audio.example.com" }),
+    tab({ id: 6, url: "https://unknown.example.com" })
+  ];
+
+  assert.deepEqual(findUnusedTabs(tabs, { now }).map((item) => item.id), [1]);
+});
+
+test("allows the unused threshold and pinned-tab policy to be configured", () => {
+  const tabs = [
+    tab({ id: 1, index: 2, lastAccessed: 10, pinned: true, url: "https://pinned.example.com" }),
+    tab({ id: 2, index: 1, lastAccessed: 20, url: "https://old.example.com" })
+  ];
+
+  assert.deepEqual(
+    findUnusedTabs(tabs, { includePinned: true, now: 100, unusedAfterMs: 50 }).map((item) => item.id),
+    [2, 1]
+  );
 });
