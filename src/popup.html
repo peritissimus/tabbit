@@ -26,6 +26,10 @@
           <span id="duplicateCount" class="metric-value">0</span>
           <span class="metric-label">Dupes</span>
         </div>
+        <div class="metric">
+          <span id="unusedCount" class="metric-value">0</span>
+          <span class="metric-label">Unused</span>
+        </div>
       </section>
 
       <section class="surface ai-surface" aria-label="AI" data-expanded="no">
@@ -52,8 +56,12 @@
               <input id="aiApiKey" type="password" autocomplete="off" placeholder="sk-..." />
             </label>
             <label class="field">
-              <span>Model</span>
+              <span>Grouping &amp; page selection</span>
               <input id="aiModel" type="text" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>Brief model</span>
+              <input id="aiBriefModel" type="text" autocomplete="off" />
             </label>
             <label class="field context-field">
               <span>Context</span>
@@ -68,6 +76,7 @@
         <div class="actions-secondary">
           <button id="reorganizeButton" class="button" type="button" title="Ungroup all tabs and re-group with a fresh AI plan">Reorganize</button>
           <button id="dedupeButton" class="button" type="button">Dedupe</button>
+          <button id="unusedButton" class="button" type="button" title="Close tabs not accessed in the last 7 days">Clean up</button>
           <button id="ungroupButton" class="button" type="button">Ungroup</button>
           <button id="saveSessionButton" class="button" type="button">Save</button>
         </div>
@@ -93,6 +102,7 @@
       </section>
     </main>
 
+    <script src="./ai-config.js"></script>
     <script src="./organizer.js"></script>
     <script src="./popup.js"></script>
   </body>

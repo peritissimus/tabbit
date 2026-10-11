@@ -2,14 +2,16 @@ const {
   TAB_GROUP_ID_NONE,
   buildGroupingPlanFromAiGroups,
   buildGroupingPlan,
-  findDuplicateTabs
+  findDuplicateTabs,
+  findUnusedTabs
 } = window.TabbitOrganizer;
 
 const STORAGE_KEY = "tabbit.sessions";
 const AI_SETTINGS_KEY = "tabbit.aiSettings";
 const UI_STATE_KEY = "tabbit.uiState";
-const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const DEFAULT_AI_MODEL = "gpt-5.4-nano";
+const PLAN_KEY = "tabbit.plan";
+const PLAN_PENDING_MAX_MS = 2 * 60 * 1000;
+const { DEFAULT_AI_MODEL, DEFAULT_BRIEF_MODEL, MODEL_ROUTING_VERSION, normalizeAiSettings, buildJsonRequest } = window.TabbitAiConfig;
 const TAB_GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
 
 const DEFAULT_OPTIONS = {
@@ -24,6 +26,7 @@ const elements = {
   aiBody: document.querySelector("#aiBody"),
   aiContext: document.querySelector("#aiContext"),
   aiModel: document.querySelector("#aiModel"),
+  aiBriefModel: document.querySelector("#aiBriefModel"),
   aiSummary: document.querySelector("#aiSummary"),
   aiSurface: document.querySelector(".ai-surface"),
   aiToggle: document.querySelector("#aiToggle"),
@@ -40,6 +43,8 @@ const elements = {
   sessionList: document.querySelector("#sessionList"),
   statusPill: document.querySelector("#statusPill"),
   tabCount: document.querySelector("#tabCount"),
+  unusedButton: document.querySelector("#unusedButton"),
+  unusedCount: document.querySelector("#unusedCount"),
   ungroupButton: document.querySelector("#ungroupButton")
 };
 
@@ -57,6 +62,7 @@ const colorMap = {
 
 const state = {
   duplicatePlan: null,
+  unusedTabs: [],
   aiSettings: null,
   groupPlan: null,
   planSource: "local",
@@ -103,6 +109,7 @@ function setBusy(isBusy) {
     elements.refreshButton,
     elements.reorganizeButton,
     elements.saveSessionButton,
+    elements.unusedButton,
     elements.ungroupButton
   ]) {
     button.disabled = isBusy;
@@ -149,11 +156,11 @@ async function getStoredAiSettings() {
   const result = await chrome.storage.local.get(AI_SETTINGS_KEY);
   const settings = result[AI_SETTINGS_KEY] || {};
 
-  return {
-    apiKey: typeof settings.apiKey === "string" ? settings.apiKey : "",
-    model: typeof settings.model === "string" && settings.model.trim() ? settings.model : DEFAULT_AI_MODEL,
-    context: typeof settings.context === "string" ? settings.context : ""
-  };
+  const normalized = normalizeAiSettings(settings);
+  if (settings.modelRoutingVersion !== MODEL_ROUTING_VERSION) {
+    await chrome.storage.local.set({ [AI_SETTINGS_KEY]: normalized });
+  }
+  return normalized;
 }
 
 function readAiSettingsFromForm() {
@@ -165,6 +172,8 @@ function readAiSettingsFromForm() {
   return {
     apiKey: typedApiKey || storedApiKey,
     model: typedModel || DEFAULT_AI_MODEL,
+    briefModel: elements.aiBriefModel.value.trim() || DEFAULT_BRIEF_MODEL,
+    modelRoutingVersion: MODEL_ROUTING_VERSION,
     context: typedContext.trim().slice(0, 600)
   };
 }
@@ -181,12 +190,13 @@ async function saveAiSettings() {
 
   if (hasKey && !previousHadKey) {
     setAiExpanded(false);
-    await refresh();
+    await replan();
   }
 }
 
 function renderAiSettings(settings) {
   elements.aiModel.value = settings.model || DEFAULT_AI_MODEL;
+  elements.aiBriefModel.value = settings.briefModel || DEFAULT_BRIEF_MODEL;
   elements.aiContext.value = settings.context || "";
   elements.aiApiKey.value = "";
   elements.aiApiKey.placeholder = settings.apiKey ? "Saved locally" : "sk-...";
@@ -219,6 +229,7 @@ function renderPlan() {
   elements.tabCount.textContent = String(state.tabs.length);
   elements.groupCount.textContent = String(groups.length);
   elements.duplicateCount.textContent = String(state.duplicatePlan?.removableTabs.length || 0);
+  elements.unusedCount.textContent = String(state.unusedTabs.length);
 
   if (groups.length === 0) {
     elements.groupPreview.innerHTML =
@@ -346,74 +357,86 @@ function buildAiMessages(tabs, options, settings) {
   ];
 }
 
-function parseAiJsonContent(content) {
-  const trimmed = String(content || "").trim();
-
-  if (!trimmed) {
-    throw new Error("AI returned an empty response");
-  }
-
-  try {
-    return JSON.parse(trimmed);
-  } catch (_error) {
-    const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-
-    if (!jsonMatch) {
-      throw new Error("AI did not return JSON");
-    }
-
-    return JSON.parse(jsonMatch[0]);
-  }
-}
-
+// The background worker makes the call and stores the result, so a plan
+// requested just before the popup closes is still there when it reopens.
 async function requestAiGroups(tabs, settings, options) {
   const messages = buildAiMessages(tabs, options, settings);
-  const requestBody = {
-    max_completion_tokens: 4096,
-    messages,
-    model: settings.model,
-    response_format: { type: "json_object" }
-  };
+  const requestBody = buildJsonRequest(messages, settings, "grouping");
 
-  const response = await fetch(OPENAI_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${settings.apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(requestBody)
+  const plan = await chrome.runtime.sendMessage({
+    type: "tabbit.requestPlan",
+    requestBody,
+    tabIds: tabs.filter((tab) => window.TabbitOrganizer.isGroupableTab(tab, options)).map((tab) => tab.id),
+    windowId: tabs[0]?.windowId
   });
 
-  const payload = await response.json().catch(() => ({}));
+  state.aiDebug = plan?.debug || null;
 
-  if (!response.ok || payload.error) {
-    state.aiDebug = {
-      timestamp: new Date().toISOString(),
-      request: requestBody,
-      response: payload,
-      status: response.status,
-      error: payload.error?.message || `HTTP ${response.status}`
-    };
-    throw new Error(payload.error?.message || `OpenAI request failed with HTTP ${response.status}`);
+  if (plan?.status !== "done") {
+    throw new Error(plan?.error || "AI request failed");
   }
 
-  const content = payload.choices?.[0]?.message?.content;
-  const parsed = parseAiJsonContent(content);
+  return plan.groups;
+}
 
-  state.aiDebug = {
-    timestamp: new Date().toISOString(),
-    request: requestBody,
-    response: payload,
-    status: response.status,
-    rawContent: content,
-    parsed
-  };
+async function getStoredPlan() {
+  const result = await chrome.storage.local.get(PLAN_KEY);
+  return result[PLAN_KEY] || null;
+}
 
-  if (!Array.isArray(parsed.groups)) {
-    throw new Error("AI JSON did not include a groups array");
+function waitForStoredPlan() {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => finish(null), PLAN_PENDING_MAX_MS);
+
+    function finish(plan) {
+      clearTimeout(timer);
+      chrome.storage.onChanged.removeListener(onChange);
+      resolve(plan);
+    }
+
+    function onChange(changes) {
+      const plan = changes[PLAN_KEY]?.newValue;
+
+      if (plan && plan.status !== "running") {
+        finish(plan);
+      }
+    }
+
+    chrome.storage.onChanged.addListener(onChange);
+  });
+}
+
+// Reuses the last AI plan instead of asking again every time the popup opens.
+// Tabs opened since then are left out, and Organize asks for a fresh plan.
+async function showStoredPlan() {
+  let plan = await getStoredPlan();
+
+  if (plan?.status === "running" && Date.now() - plan.startedAt < PLAN_PENDING_MAX_MS) {
+    setBusy(true);
+    setStatus("Asking AI");
+    renderPlanLoading();
+    plan = await waitForStoredPlan();
+    setBusy(false);
+    renderPlan();
+    setStatus(plan?.status === "failed" ? "AI failed" : "Ready", plan?.status === "failed" ? "error" : "default");
   }
 
-  return parsed.groups;
+  const options = getOptions();
+  const groupableIds = state.tabs
+    .filter((tab) => window.TabbitOrganizer.isGroupableTab(tab, options))
+    .map((tab) => tab.id);
+  const plannedIds = new Set(plan?.tabIds || []);
+  const newCount = groupableIds.filter((id) => !plannedIds.has(id)).length;
+
+  if (plan?.status !== "done" || plan.windowId !== state.tabs[0]?.windowId || newCount === groupableIds.length) {
+    return;
+  }
+
+  state.groupPlan = buildGroupingPlanFromAiGroups(state.tabs, plan.groups, options);
+  state.planSource = newCount === 0 ? "openai" : "stale";
+  state.aiDebug = plan.debug || null;
+  renderPlan();
+  setStatus(newCount === 0 ? "AI plan" : `AI plan · ${newCount} new`);
 }
 
 async function refreshLocal() {
@@ -424,6 +447,7 @@ async function refreshLocal() {
     state.groupPlan = buildGroupingPlan(state.tabs, getOptions());
     state.planSource = "local";
     state.duplicatePlan = findDuplicateTabs(state.tabs, getOptions());
+    state.unusedTabs = findUnusedTabs(state.tabs, getOptions());
     state.sessions = await getSessions();
     renderPlan();
     renderSessions();
@@ -455,6 +479,7 @@ async function _buildAiPlanInner() {
     state.groupPlan = buildGroupingPlanFromAiGroups(state.tabs, aiGroups, options);
     state.planSource = "openai";
     state.duplicatePlan = findDuplicateTabs(state.tabs, options);
+    state.unusedTabs = findUnusedTabs(state.tabs, options);
     state.sessions = await getSessions();
     state.aiSettings = settings;
     renderPlan();
@@ -465,6 +490,7 @@ async function _buildAiPlanInner() {
     state.groupPlan = buildGroupingPlan(state.tabs, getOptions());
     state.planSource = "local";
     state.duplicatePlan = findDuplicateTabs(state.tabs, getOptions());
+    state.unusedTabs = findUnusedTabs(state.tabs, getOptions());
     state.sessions = await getSessions();
     renderPlan();
     renderSessions();
@@ -491,6 +517,11 @@ async function buildAiPlan() {
 }
 
 async function refresh() {
+  await refreshLocal();
+  await showStoredPlan();
+}
+
+async function replan() {
   if (state.aiSettings?.apiKey) {
     await buildAiPlan();
   } else {
@@ -577,6 +608,29 @@ async function closeDuplicateTabs() {
 
   if (removableIds.length === 0) {
     setStatus("No dupes", "warn");
+    return;
+  }
+
+  setBusy(true);
+
+  try {
+    await chrome.tabs.remove(removableIds);
+    setStatus(`Closed ${removableIds.length}`);
+    await refresh();
+  } catch (error) {
+    setStatus("Failed", "error");
+    console.error(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function closeUnusedTabs() {
+  await refreshLocal();
+  const removableIds = state.unusedTabs.map((tab) => tab.id);
+
+  if (removableIds.length === 0) {
+    setStatus("No unused tabs", "warn");
     return;
   }
 
@@ -711,12 +765,20 @@ function buildDebugSnapshot() {
       }
     : null;
 
+  const unusedTabs = state.unusedTabs.map((tab) => ({
+    id: tab.id,
+    title: tab.title,
+    url: tab.url,
+    lastAccessed: tab.lastAccessed
+  }));
+
   return {
     exportedAt: new Date().toISOString(),
     planSource: state.planSource,
     options: getOptions(),
     settings: {
       model: state.aiSettings?.model || null,
+      briefModel: state.aiSettings?.briefModel || null,
       hasApiKey: Boolean(state.aiSettings?.apiKey),
       contextLength: (state.aiSettings?.context || "").length,
       context: state.aiSettings?.context || ""
@@ -733,6 +795,7 @@ function buildDebugSnapshot() {
     })),
     groupPlan,
     duplicatePlan,
+    unusedTabs,
     sessionCount: state.sessions.length,
     aiDebug: state.aiDebug
   };
@@ -780,13 +843,15 @@ function bindEvents() {
   elements.organizeButton.addEventListener("click", organizeTabs);
   elements.reorganizeButton.addEventListener("click", reorganizeTabs);
   elements.dedupeButton.addEventListener("click", closeDuplicateTabs);
+  elements.unusedButton.addEventListener("click", closeUnusedTabs);
   elements.ungroupButton.addEventListener("click", ungroupTabs);
-  elements.refreshButton.addEventListener("click", refresh);
+  elements.refreshButton.addEventListener("click", replan);
   elements.saveSessionButton.addEventListener("click", saveSession);
   elements.debugExportButton.addEventListener("click", exportDebugSnapshot);
 
   elements.aiApiKey.addEventListener("change", saveAiSettings);
   elements.aiModel.addEventListener("change", saveAiSettings);
+  elements.aiBriefModel.addEventListener("change", saveAiSettings);
   elements.aiContext.addEventListener("change", saveAiSettings);
 
   elements.aiToggle.addEventListener("click", () => {
