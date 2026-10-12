@@ -12,6 +12,8 @@
     { title: "Anthropic News", lab: "Anthropic", url: "https://www.anthropic.com/news", topics: ["AI", "agents", "coding"] },
     { title: "OpenAI News", lab: "OpenAI", url: "https://openai.com/news/", topics: ["AI", "agents", "voice"] },
     { title: "Google DeepMind", lab: "Google DeepMind", url: "https://deepmind.google/discover/blog/", topics: ["AI", "models", "research"] },
+    { title: "Google Developers Blog", lab: "Google AI", url: "https://developers.googleblog.com/", topics: ["AI", "Gemma", "on-device AI", "developer releases"] },
+    { title: "Google AI Announcements", lab: "Google AI", url: "https://blog.google/innovation-and-ai/", topics: ["AI", "Gemini", "Gemma", "models"] },
     { title: "Meta AI", lab: "Meta AI", url: "https://ai.meta.com/blog/", topics: ["AI", "open models", "research"] },
     { title: "xAI News", lab: "xAI", url: "https://x.ai/news", topics: ["AI", "models", "agents"] },
     { title: "Mistral News", lab: "Mistral", url: "https://mistral.ai/news/", topics: ["AI", "open models", "voice"] },
@@ -64,7 +66,7 @@
     const base = candidates.filter(s => s.title === "Hacker News" || s.title === "Show HN" || s.lab);
     base.sort((a,b) => Number(Boolean(a.lab)) - Number(Boolean(b.lab)));
     const rest = candidates.filter(s => selected.has(s.id) && !base.includes(s));
-    return [...base, ...(rest.length ? rest : candidates.filter(s => !base.includes(s)).slice(0, 3))].slice(0, 12);
+    return [...base, ...(rest.length ? rest : candidates.filter(s => !base.includes(s)).slice(0, 3))].slice(0, 14);
   }
   function buildEvidence(pages) {
     const items = [], seen = new Map(), evidencePages = [];
@@ -74,7 +76,7 @@
         const url = publicUrl(link.url);
         if (!url || !clip(link.title,140)) continue;
         const sourceUrl = new URL(page.item.url);
-        const lab = page.item.lab && url.hostname.replace(/^www\./, "") === sourceUrl.hostname.replace(/^www\./, "") && url.pathname !== sourceUrl.pathname && url.pathname.split("/").filter(Boolean).length >= 2 ? page.item.lab : null;
+        const lab = page.item.lab && url.hostname.replace(/^www\./, "") === sourceUrl.hostname.replace(/^www\./, "") && url.pathname !== sourceUrl.pathname && url.pathname.split("/").filter(Boolean).length >= (sourceUrl.pathname === "/" ? 1 : 2) ? page.item.lab : null;
         const key = normalizeUrlForDuplicate(url.href);
         let item = seen.get(key);
         if (!item) {

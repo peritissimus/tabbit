@@ -14,13 +14,13 @@ test('discovery profile excludes private, internal, authentication and unsupport
   assert.equal(result[0].titles[0],'Coding agents');
   for(const url of ['javascript:alert(1)','http://127.1/','https://user:pass@example.com','http://[::1]/','http://app.internal/','http://169.254.169.254/']) assert.equal(publicUrl(url),null,url);
 });
-test('source selection accepts known IDs, caps twelve and preserves community discovery',()=>{
+test('source selection accepts known IDs, caps fourteen and preserves community discovery',()=>{
   const candidates=sourceCandidates([{host:'simonwillison.net',visits:20}]);
   assert.equal(candidates[0].title,'Simon Willison');
   const selected=selectSources([999,...candidates.map(s=>s.id)],candidates);
-  assert.equal(selected.length,12);
+  assert.equal(selected.length,14);
   assert.deepEqual(selected.slice(0,2).map(s=>s.title),['Hacker News','Show HN']);
-  assert.equal(selectSources(null,candidates).length,11);
+  assert.equal(selectSources(null,candidates).length,13);
   for (const lab of ['OpenAI','Anthropic','Google DeepMind','Meta AI','xAI','Mistral']) assert.ok(selected.some(s=>s.lab===lab));
 });
 test('evidence keeps actual public links with observed dates/traction, deduplicates them',()=>{
@@ -61,4 +61,15 @@ test('official announcements take provenance priority over duplicate community c
   assert.equal(evidence.items[0].source,'Anthropic News');
   assert.equal(evidence.items[0].score,200);
   assert.equal(evidence.items.find(i=>i.title==='External').lab,null);
+});
+test('Google developer announcements are always watched and single-segment article paths retain lab provenance',()=>{
+  const sources=selectSources([],sourceCandidates([]));
+  assert.ok(sources.some(s=>s.url==='https://developers.googleblog.com/'));
+  assert.ok(sources.some(s=>s.url==='https://blog.google/innovation-and-ai/'));
+  const date='2026-10-06T00:00:00Z';
+  const evidence=buildEvidence([{ok:true,item:sources.find(s=>s.title==='Google Developers Blog'),text:'October 6, 2026: EmbeddingGemma 2 launch.',links:[{title:'EmbeddingGemma 2: The Developer Guide',url:'https://developers.googleblog.com/embeddinggemma-2-the-developer-guide/',publishedAt:date}]}]);
+  assert.equal(evidence.items[0].lab,'Google AI');
+  const picks=buildFeed({items:[{itemId:1,title:'EmbeddingGemma 2',kind:'news'}]},evidence.items,{},Date.parse('2026-10-12T12:00:00Z'));
+  assert.equal(picks.length,1);
+  assert.equal(picks[0].lab,'Google AI');
 });
