@@ -26,17 +26,11 @@
     $("feedFilters").hidden=!items.length;
     document.querySelectorAll("[data-feed-filter]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.feedFilter===state.filter)));
     let filtered=items.filter(i=>state.filter==="all" || (state.filter==="labs" ? Boolean(i.lab) : i.kind===state.filter));
-    if (state.filter==="all" && !state.expanded) {
-      const labs=filtered.filter(i=>i.lab);
-      const others=filtered.filter(i=>!i.lab);
-      const picked=[...labs.slice(0,2),...others.filter(i=>i.kind==="news").slice(0,labs.length ? 1 : 2),...others.filter(i=>i.kind==="product").slice(0,labs.length ? 1 : 2)];
-      filtered=[...picked,...filtered.filter(i=>!picked.includes(i))];
-    }
     const shown=state.expanded ? filtered : filtered.slice(0,4);
     $("feedItems").innerHTML=shown.map(item=>{
       const posted=item.publishedAt && Number.isFinite(Date.parse(item.publishedAt)) ? `Posted ${new Date(item.publishedAt).toLocaleDateString(undefined,{month:"short",day:"numeric"})}` : "Date not provided";
       const traction=Number.isFinite(item.score) ? ` · ${item.score} HN points` : "";
-      return `<article class="feed-card"><div class="feed-meta"><span class="feed-kind">${item.lab ? "Lab announcement" : item.kind==="product" ? "Product" : "News"}</span><span>${escape(item.source)}</span></div><a class="feed-story" href="${escape(item.url)}" target="_blank" rel="noopener noreferrer"><h3>${escape(item.title)}</h3><p>${escape(item.summary)}</p></a><p class="feed-reason">${escape(item.reason)}</p><div class="feed-card-footer"><span class="feed-date">${escape(posted+traction)}</span><div class="feed-votes" aria-label="Feedback"><button type="button" data-feed-vote="1" data-feed-url="${escape(item.url)}" aria-label="More like ${escape(item.title)}" aria-pressed="false" title="More like this">${thumb(false)}</button><button type="button" data-feed-vote="-1" data-feed-url="${escape(item.url)}" aria-label="Less like ${escape(item.title)}" aria-pressed="false" title="Less like this">${thumb(true)}</button></div></div></article>`;
+      return `<article class="feed-card"><div class="feed-meta"><span class="feed-kind">${item.lab ? "Lab announcement" : item.kind==="product" ? "Product" : "News"}</span><span>${escape(item.source)}</span>${item.impact?.score >= 28 && item.impact?.confidence === "reported" ? '<span class="feed-impact">High impact</span>' : ""}</div><a class="feed-story" href="${escape(item.url)}" target="_blank" rel="noopener noreferrer"><h3>${escape(item.title)}</h3><p>${escape(item.summary)}</p></a><p class="feed-reason">${item.impact?.why ? `<span class="feed-why-label">Why it matters</span> ${escape(item.impact.why)}` : escape(item.reason)}</p><div class="feed-card-footer"><span class="feed-date">${escape(posted+traction)}</span><div class="feed-votes" aria-label="Feedback"><button type="button" data-feed-vote="1" data-feed-url="${escape(item.url)}" aria-label="More like ${escape(item.title)}" aria-pressed="false" title="More like this">${thumb(false)}</button><button type="button" data-feed-vote="-1" data-feed-url="${escape(item.url)}" aria-label="Less like ${escape(item.title)}" aria-pressed="false" title="Less like this">${thumb(true)}</button></div></div></article>`;
     }).join("") || (state.feed ? '<p class="feed-empty">No matching picks in this edition. Tune your instructions or try another refresh.</p>' : "");
     voteButtons();
     $("feedMore").hidden=filtered.length<=4;

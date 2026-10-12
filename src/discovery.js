@@ -80,23 +80,39 @@
         const key = normalizeUrlForDuplicate(url.href);
         let item = seen.get(key);
         if (!item) {
-          item = { id: items.length + 1, title: clip(link.title, 140), url: url.href, source: page.item.title, sourceUrl: page.item.url, lab, publishedAt: link.publishedAt || null, score: Number.isFinite(link.score) ? link.score : null, comments: Number.isFinite(link.comments) ? link.comments : null };
+          item = { id: items.length + 1, title: clip(link.title, 140), url: url.href, source: page.item.title, sourceUrl: page.item.url, lab, evidenceContext: clip(link.context || link.title, 800), publishedAt: link.publishedAt || null, score: Number.isFinite(link.score) ? link.score : null, comments: Number.isFinite(link.comments) ? link.comments : null };
           seen.set(key, item); items.push(item);
         } else if (lab) {
           item.lab = lab;
           item.source = page.item.title;
           item.sourceUrl = page.item.url;
           if (link.publishedAt) item.publishedAt = link.publishedAt;
+          item.evidenceContext = clip(link.context || link.title, 800);
         }
-        links.push({ id: item.id, title: item.title, lab: item.lab, publishedAt: item.publishedAt, score: item.score, comments: item.comments });
+        links.push({ id: item.id, title: item.title, lab: item.lab, context: item.evidenceContext, publishedAt: item.publishedAt, score: item.score, comments: item.comments });
       }
       evidencePages.push({ source: page.item.title, lab: page.item.lab || null, text: clip(page.text, 10000), links });
     }
     return { items, pages: evidencePages };
   }
+  function assessImpact(value, item) {
+    const input = value && typeof value === "object" ? value : {};
+    const level = key => Number.isFinite(input[key]) ? Math.max(0, Math.min(3, Math.round(input[key]))) : 0;
+    const quote = clip(input.quote, 240);
+    const context = clip(item.evidenceContext, 800);
+    const supported = input.confidence === "reported" && quote.length >= 12 && context.includes(quote) && context.length > String(item.title || "").length + 40;
+    const capability = Math.min(level("capability"), supported ? 3 : 1);
+    const relevance = level("relevance");
+    const actionability = Math.min(level("actionability"), supported ? 3 : 1);
+    const breadth = Math.min(level("breadth"), supported ? 3 : 1);
+    return { capability, relevance, actionability, breadth, confidence: supported ? "reported" : "uncertain", why: clip(input.why,160), quote: supported ? quote : "", score: capability * 5 + relevance * 4 + actionability * 3 + breadth };
+  }
+  function rankFeed(items) {
+    return [...items].sort((a,b) => (b.impact?.score || 0) - (a.impact?.score || 0) || (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0) || Math.min(b.score || 0,1000) - Math.min(a.score || 0,1000));
+  }
   function buildFeed(payload, evidence, feedback = {}, now = Date.now()) {
     const byId = new Map(evidence.map(item => [item.id, item])), seen = new Set(), selected = [];
-    for (const entry of Array.isArray(payload?.items) ? payload.items : []) {
+    for (const entry of Array.isArray(payload?.items) ? payload.items.slice(0,64) : []) {
       const item = byId.get(Number(entry.itemId));
       if (!item || seen.has(item.url) || !["news", "product"].includes(entry.kind) || !clip(entry.title,100)) continue;
       const key = normalizeUrlForDuplicate(item.url);
@@ -105,10 +121,11 @@
       const published = item.publishedAt ? Date.parse(item.publishedAt) : NaN;
       if (Number.isFinite(published) && (published > now + 86400000 || now - published > (entry.kind === "product" ? 14 : 7) * 86400000)) continue;
       seen.add(item.url);
-      selected.push({ ...item, title: clip(entry.title,100), kind: entry.kind, summary: clip(entry.summary,180), reason: clip(entry.reason,120), topics: [...new Set((Array.isArray(entry.topics) ? entry.topics : []).map(t=>clip(t,32)).filter(Boolean))].slice(0,3) });
-      if (selected.length === 16) break;
+      const impact = assessImpact(entry.impact, item);
+      const { evidenceContext, ...publicItem } = item;
+      selected.push({ ...publicItem, impact, title: clip(entry.title,100), kind: entry.kind, summary: clip(entry.summary,180), reason: clip(entry.reason,120), topics: [...new Set((Array.isArray(entry.topics) ? entry.topics : []).map(t=>clip(t,32)).filter(Boolean))].slice(0,3) });
     }
-    return selected;
+    return rankFeed(selected).slice(0,16);
   }
   function feedbackExamples(feedback) {
     return Object.values(feedback || {}).filter(r => r && (r.vote === 1 || r.vote === -1)).sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,40)
@@ -121,5 +138,5 @@
     else next[key] = { url:item.url, title:item.title, topics:item.topics, source:item.source, vote, updatedAt:now };
     return Object.fromEntries(Object.entries(next).sort((a,b)=>(b[1].updatedAt||0)-(a[1].updatedAt||0)).slice(0,200));
   }
-  return { SOURCES, browsingProfile, sourceCandidates, selectSources, buildEvidence, buildFeed, feedbackExamples, applyFeedback, publicUrl };
+  return { SOURCES, browsingProfile, sourceCandidates, selectSources, buildEvidence, buildFeed, assessImpact, rankFeed, feedbackExamples, applyFeedback, publicUrl };
 });

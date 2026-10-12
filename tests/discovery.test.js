@@ -73,3 +73,35 @@ test('Google developer announcements are always watched and single-segment artic
   assert.equal(picks.length,1);
   assert.equal(picks[0].lab,'Google AI');
 });
+test('practical impact outranks recency, popularity and lab branding',()=>{
+  const quote='The release enables local multimodal retrieval without a cloud service.';
+  const evidence=[
+    {id:1,url:'https://lab.example/partnership',title:'A partnership',lab:'Big Lab',score:10000,publishedAt:new Date(NOW).toISOString(),evidenceContext:'A partnership announcement.'},
+    {id:2,url:'https://tool.example/release',title:'Local retrieval release',publishedAt:new Date(NOW-3*86400000).toISOString(),evidenceContext:quote+' The open model is available for developers to download and use today.'}
+  ];
+  const result=buildFeed({items:[
+    {itemId:1,title:'Partnership',kind:'news',impact:{capability:0,relevance:1,actionability:0,breadth:1,confidence:'uncertain',why:'No usable change.'}},
+    {itemId:2,title:'Local retrieval release',kind:'product',impact:{capability:3,relevance:3,actionability:2,breadth:2,confidence:'reported',quote,why:'You can build local search without a cloud dependency.'}}
+  ]},evidence,{},NOW);
+  assert.deepEqual(result.map(i=>i.id),[2,1]);
+  assert.equal(result[0].impact.confidence,'reported');
+  assert.ok(result[0].impact.score>=28);
+  assert.equal(result[0].evidenceContext,undefined,'do not persist whole extraction contexts');
+});
+test('unsupported or title-only impact estimates are discounted and scores are bounded',()=>{
+  const {assessImpact}=require('../src/discovery');
+  const inflated={capability:999,relevance:999,actionability:999,breadth:999,confidence:'reported',quote:'This is not in the source',why:'Unsubstantiated consequence'};
+  const result=assessImpact(inflated,{title:'A release',evidenceContext:'A release'});
+  assert.equal(result.score,21);
+  assert.equal(result.confidence,'uncertain');
+  assert.equal(result.quote,'');
+  assert.equal(assessImpact({capability:'3',relevance:Infinity},{}).score,0);
+});
+test('feed truncates after impact ranking rather than dropping a consequential later item',()=>{
+  const quote='Users must migrate their integrations before the endpoint is removed.';
+  const evidence=Array.from({length:17},(_,i)=>({id:i+1,url:`https://tool.example/${i}`,title:'Endpoint deprecation',evidenceContext:quote+' The provider documents the migration and replacement endpoint in this notice.',publishedAt:new Date(NOW).toISOString()}));
+  const payload={items:evidence.map((item,i)=>({itemId:item.id,title:'Endpoint deprecation',kind:'news',impact:{capability:i===16?3:0,relevance:3,actionability:3,breadth:2,confidence:'reported',quote,why:'Migrate your integration.'}}))};
+  const items=buildFeed(payload,evidence,{},NOW);
+  assert.equal(items.length,16);
+  assert.equal(items[0].id,17);
+});
