@@ -10,33 +10,31 @@
     <main class="page">
       <header class="top">
         <div class="top-copy">
-          <p class="eyebrow">Tabbit</p>
           <h1 id="greeting"></h1>
           <p id="dateLine" class="date-line"></p>
         </div>
 
+        <div class="search-wrap">
+          <input
+            id="search"
+            class="search"
+            type="search"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Search tabs, links, or the web"
+            aria-label="Jump to an open tab or recent page"
+          />
+
+          <button id="clearSearch" class="clear-search" type="button" aria-label="Clear search" hidden>Clear</button>
+          <kbd class="search-shortcut" aria-hidden="true">/</kbd>
+        </div>
 
       </header>
-
-      <div class="search-wrap">
-      <input
-        id="search"
-        class="search"
-        type="search"
-        autocomplete="off"
-        spellcheck="false"
-        placeholder="Find a tab, revisit a page, or search the web"
-        aria-label="Jump to an open tab or recent page"
-      />
-
-      <button id="clearSearch" class="clear-search" type="button" aria-label="Clear search" hidden>Clear</button>
-      <kbd class="search-shortcut" aria-hidden="true">/</kbd>
-      </div>
 
       <section id="results" class="results" aria-live="polite" hidden></section>
 
       <div id="board" class="board">
-        <section aria-labelledby="quickHeading">
+        <section class="shortcuts-section" aria-labelledby="quickHeading">
           <div class="section-head">
             <h2 id="quickHeading">Your shortcuts</h2>
             <button id="editShortcuts" class="ghost-button" type="button">Edit shortcuts</button>
@@ -44,7 +42,7 @@
           <div id="quickLinks" class="quick-links"></div>
         </section>
 
-        <section aria-labelledby="localHeading">
+        <section class="servers-section" aria-labelledby="localHeading">
           <div class="section-head">
             <h2 id="localHeading">Dev servers</h2>
           </div>
@@ -66,20 +64,22 @@
           <div id="brief" aria-live="polite"></div>
         </section>
 
-        <details class="workspace-directory">
-          <summary class="directory-summary">All work links <span id="frequentCount" class="subtle-count"></span></summary>
-          <div id="frequent" class="card-grid"></div>
-        </details>
+        <div class="workspace-tools">
+          <details class="workspace-directory">
+            <summary class="directory-summary">All work links <span id="frequentCount" class="subtle-count"></span></summary>
+            <div id="frequent" class="card-grid"></div>
+          </details>
 
-        <details class="workspace-directory">
-          <summary class="directory-summary">Open tabs</summary>
-          <div id="openGroups" class="card-grid"></div>
-        </details>
+          <details class="workspace-directory">
+            <summary class="directory-summary">Open tabs</summary>
+            <div id="openGroups" class="card-grid"></div>
+          </details>
 
-        <details class="workspace-directory">
-          <summary class="directory-summary">Saved sessions <span id="sessionCount" class="subtle-count">0 saved</span></summary>
-          <div id="sessionList" class="card-grid"></div>
-        </details>
+          <details class="workspace-directory">
+            <summary class="directory-summary">Saved sessions <span id="sessionCount" class="subtle-count">0 saved</span></summary>
+            <div id="sessionList" class="card-grid"></div>
+          </details>
+        </div>
       </div>
     </main>
 
