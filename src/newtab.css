@@ -197,3 +197,48 @@ dialog::backdrop { background: rgba(0,0,0,.72); }
   *, *::before, *::after { transition: none !important; }
   button:active:not(:disabled), .quick-link:active, .server:active { scale: 1; }
 }
+
+/* Discovery is a small, stable edition beneath the work controls. */
+.discovery-section { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 20px; }
+.discovery-subtitle { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+.discovery-section .section-head { flex-wrap: wrap; }
+.feed-message, .feed-empty { color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.feed-message:empty { display: none; }
+.feed-message { margin-bottom: 12px; }
+.feed-filters { display: flex; gap: 4px; margin-bottom: 12px; }
+.feed-filters button { min-height: 40px; min-width: 64px; padding: 8px 12px; background: transparent; color: var(--text-muted); border: 0; border-radius: 8px; font-size: 12px; transition: background 140ms var(--ease), color 140ms var(--ease); }
+.feed-filters button[aria-pressed="true"] { background: var(--bg-soft-hover); color: var(--text); }
+.feed-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.feed-card { min-width: 0; padding: 16px; border-radius: 16px; background: var(--bg-soft); box-shadow: var(--surface-ring); display: flex; flex-direction: column; }
+.feed-meta { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 11px; }
+.feed-kind { color: var(--text-dim); font-weight: 500; }
+.feed-meta > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-story { display: block; border-radius: 6px; padding: 8px 0; min-height: 40px; }
+.feed-story h3 { font-size: 14px; font-weight: 550; line-height: 1.5; overflow-wrap: anywhere; }
+.feed-story p { color: var(--text-dim); font-size: 12px; line-height: 1.6; margin-top: 4px; }
+.feed-story:hover h3 { text-decoration: underline; text-underline-offset: 4px; }
+.feed-reason { color: var(--text-muted); font-size: 11px; line-height: 1.5; margin-top: auto; }
+.feed-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.feed-date { color: var(--text-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.feed-votes { display: flex; flex: none; gap: 4px; }
+.feed-votes button { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 8px; color: var(--text-muted); background: transparent; transition: background 140ms var(--ease), color 140ms var(--ease), scale 140ms var(--ease); }
+.feed-votes button:hover { color: var(--text); background: var(--bg-soft-hover); }
+.feed-votes button[aria-pressed="true"] { color: var(--text); background: #303035; }
+.feed-footer { display: flex; align-items: start; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 8px; }
+#feedSources { margin-left: auto; color: var(--text-muted); font-size: 11px; }
+#feedSources summary { min-height: 40px; padding: 10px 8px; cursor: pointer; }
+#feedSourceList p { display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; padding: 4px 0; }
+#feedSourceList a { min-height: 40px; display: flex; align-items: center; text-decoration: underline; text-underline-offset: 3px; }
+#feedSourceList p > span { padding-top: 10px; max-width: 280px; overflow-wrap: anywhere; }
+.feed-label { display: block; font-size: 13px; margin-bottom: 8px; }
+#feedInstructions { width: 100%; resize: vertical; min-height: 120px; padding: 12px; color: var(--text); font: inherit; font-size: 13px; background: #222225; border: 1px solid var(--line-strong); border-radius: 8px; }
+#feedInstructions:focus-visible { outline: 2px solid var(--text-dim); outline-offset: 2px; }
+.feed-auto { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 8px 0; font-size: 13px; }
+.feed-auto input { width: 18px; height: 18px; accent-color: #ddd; }
+.feed-help { color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+@media (max-width:640px) {
+  .feed-grid { grid-template-columns: minmax(0,1fr); }
+  .discovery-section .head-actions { gap: 4px; }
+  .feed-card { padding: 14px; }
+  .feed-meta { font-size: 11px; }
+}

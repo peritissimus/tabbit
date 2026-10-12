@@ -5,7 +5,7 @@
   "description": "A dependency-free Chrome extension for native tab grouping and session cleanup.",
   "type": "commonjs",
   "scripts": {
-    "check": "node --check src/ai-config.js && node --check src/organizer.js && node --check src/workspace.js && node --check src/popup.js && node --check src/background.js && node --check src/newtab.js && node --check src/newtab-settings.js",
+    "check": "node --check src/ai-config.js && node --check src/organizer.js && node --check src/workspace.js && node --check src/popup.js && node --check src/background.js && node --check src/newtab.js && node --check src/newtab-settings.js && node --check src/discovery.js && node --check src/discovery-view.js",
     "icons": "node scripts/generate-icons.js",
     "test": "node --test tests/*.test.js",
     "validate": "node -e \"JSON.parse(require('node:fs').readFileSync('manifest.json', 'utf8'))\" && npm run check && npm test"

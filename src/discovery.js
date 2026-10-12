@@ -1,0 +1,123 @@
+(function initDiscovery(root, factory) {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./workspace"), require("./organizer"));
+  else root.TabbitDiscovery = factory(root.TabbitWorkspace, root.TabbitOrganizer);
+})(typeof self !== "undefined" ? self : this, function createDiscovery(workspace, organizer) {
+  const { normalizeUrlForDuplicate } = organizer;
+  const SOURCES = [
+    { title: "Hacker News", url: "https://news.ycombinator.com/", topics: ["engineering", "AI", "startups"] },
+    { title: "Show HN", url: "https://news.ycombinator.com/show", topics: ["new products", "developer tools", "personal software"] },
+    { title: "Product Hunt", url: "https://www.producthunt.com/", topics: ["new products", "design", "AI"] },
+    { title: "Techmeme", url: "https://www.techmeme.com/", topics: ["technology", "AI", "industry news"] },
+    { title: "GitHub Changelog", url: "https://github.blog/changelog/", topics: ["developer tools", "engineering", "AI"] },
+    { title: "Anthropic News", lab: "Anthropic", url: "https://www.anthropic.com/news", topics: ["AI", "agents", "coding"] },
+    { title: "OpenAI News", lab: "OpenAI", url: "https://openai.com/news/", topics: ["AI", "agents", "voice"] },
+    { title: "Google DeepMind", lab: "Google DeepMind", url: "https://deepmind.google/discover/blog/", topics: ["AI", "models", "research"] },
+    { title: "Meta AI", lab: "Meta AI", url: "https://ai.meta.com/blog/", topics: ["AI", "open models", "research"] },
+    { title: "xAI News", lab: "xAI", url: "https://x.ai/news", topics: ["AI", "models", "agents"] },
+    { title: "Mistral News", lab: "Mistral", url: "https://mistral.ai/news/", topics: ["AI", "open models", "voice"] },
+    { title: "Hugging Face Blog", url: "https://huggingface.co/blog", topics: ["AI", "open source", "local models"] },
+    { title: "Vercel Blog", url: "https://vercel.com/blog", topics: ["frontend", "developer tools", "AI"] },
+    { title: "Cloudflare Blog", url: "https://blog.cloudflare.com/", topics: ["infrastructure", "engineering"] },
+    { title: "Simon Willison", url: "https://simonwillison.net/", topics: ["AI", "agents", "engineering"] },
+    { title: "Lobsters", url: "https://lobste.rs/", topics: ["engineering", "open source"] },
+    { title: "Ars Technica", url: "https://arstechnica.com/", topics: ["technology", "engineering"] },
+    { title: "TechCrunch", url: "https://techcrunch.com/", topics: ["startups", "new products", "AI"] },
+    { title: "The Verge", url: "https://www.theverge.com/", topics: ["technology", "design", "new products"] },
+    { title: "Smashing Magazine", url: "https://www.smashingmagazine.com/", topics: ["design", "frontend"] },
+    { title: "Stripe Blog", url: "https://stripe.com/blog", topics: ["business software", "engineering"] }
+  ];
+  const clip = (value, max) => String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+  const hostMatches = (host, base) => host === base || host.endsWith(`.${base}`);
+  function publicUrl(value) {
+    try {
+      const url = new URL(value);
+      const host = url.hostname.toLowerCase();
+      if (!/^https?:$/.test(url.protocol) || url.username || url.password || !host.includes(".") || host.includes(":") || /(?:^|\.)(?:localhost|local|internal|test|invalid)$/.test(host) || /^\d+(?:\.\d+){3}$/.test(host) || !workspace.isReadableUrl(url.href) || workspace.isAuthenticationUrl(url.href)) return null;
+      return url;
+    } catch (_) { return null; }
+  }
+  function browsingProfile(history, context = "", now = Date.now()) {
+    const internal = workspace.parseInternalDomains(context);
+    const allowed = ["github.com", "github.blog", "gitlab.com", "developer.mozilla.org", "developer.chrome.com", "stackoverflow.com", "npmjs.com", "docs.python.org", "react.dev", "nextjs.org", "rust-lang.org", ...SOURCES.map(s => new URL(s.url).hostname.replace(/^www\./,""))];
+    const domains = new Map();
+    for (const item of history) {
+      const url = publicUrl(item.url);
+      if (!url || now - (item.lastVisitTime || 0) > 14 * 86400000) continue;
+      const host = url.hostname.replace(/^www\./, "");
+      if (internal.some(base => hostMatches(host, base)) || !allowed.some(base => hostMatches(host, base))) continue;
+      const record = domains.get(host) || { host, visits: 0, titles: [], lastVisitTime: 0 };
+      record.visits += Math.min(Math.max(Number(item.visitCount) || 1, 1), 100);
+      record.lastVisitTime = Math.max(record.lastVisitTime, item.lastVisitTime || 0);
+      const title = clip(item.title, 100);
+      if (title && !record.titles.includes(title) && record.titles.length < 4) record.titles.push(title);
+      domains.set(host, record);
+    }
+    return [...domains.values()].sort((a,b) => b.visits - a.visits).slice(0, 24);
+  }
+  function sourceCandidates(profile) {
+    return SOURCES.map((s, i) => ({ ...s, id: i + 1, visits: profile.filter(p => hostMatches(p.host, new URL(s.url).hostname.replace(/^www\./,""))).reduce((n,p)=>n+p.visits,0) }))
+      .sort((a,b)=>b.visits-a.visits);
+  }
+  function selectSources(ids, candidates) {
+    const selected = new Set(Array.isArray(ids) ? ids.map(Number) : []);
+    // Always watch the major labs and community launches; personalize the remaining sources.
+    const base = candidates.filter(s => s.title === "Hacker News" || s.title === "Show HN" || s.lab);
+    base.sort((a,b) => Number(Boolean(a.lab)) - Number(Boolean(b.lab)));
+    const rest = candidates.filter(s => selected.has(s.id) && !base.includes(s));
+    return [...base, ...(rest.length ? rest : candidates.filter(s => !base.includes(s)).slice(0, 3))].slice(0, 12);
+  }
+  function buildEvidence(pages) {
+    const items = [], seen = new Map(), evidencePages = [];
+    for (const page of pages.filter(p => p.ok)) {
+      const links = [];
+      for (const link of (page.links || [])) {
+        const url = publicUrl(link.url);
+        if (!url || !clip(link.title,140)) continue;
+        const sourceUrl = new URL(page.item.url);
+        const lab = page.item.lab && url.hostname.replace(/^www\./, "") === sourceUrl.hostname.replace(/^www\./, "") && url.pathname !== sourceUrl.pathname && url.pathname.split("/").filter(Boolean).length >= 2 ? page.item.lab : null;
+        const key = normalizeUrlForDuplicate(url.href);
+        let item = seen.get(key);
+        if (!item) {
+          item = { id: items.length + 1, title: clip(link.title, 140), url: url.href, source: page.item.title, sourceUrl: page.item.url, lab, publishedAt: link.publishedAt || null, score: Number.isFinite(link.score) ? link.score : null, comments: Number.isFinite(link.comments) ? link.comments : null };
+          seen.set(key, item); items.push(item);
+        } else if (lab) {
+          item.lab = lab;
+          item.source = page.item.title;
+          item.sourceUrl = page.item.url;
+          if (link.publishedAt) item.publishedAt = link.publishedAt;
+        }
+        links.push({ id: item.id, title: item.title, lab: item.lab, publishedAt: item.publishedAt, score: item.score, comments: item.comments });
+      }
+      evidencePages.push({ source: page.item.title, lab: page.item.lab || null, text: clip(page.text, 10000), links });
+    }
+    return { items, pages: evidencePages };
+  }
+  function buildFeed(payload, evidence, feedback = {}, now = Date.now()) {
+    const byId = new Map(evidence.map(item => [item.id, item])), seen = new Set(), selected = [];
+    for (const entry of Array.isArray(payload?.items) ? payload.items : []) {
+      const item = byId.get(Number(entry.itemId));
+      if (!item || seen.has(item.url) || !["news", "product"].includes(entry.kind) || !clip(entry.title,100)) continue;
+      const key = normalizeUrlForDuplicate(item.url);
+      if (feedback[key]?.vote === -1) continue;
+      // Structured sources provide exact timestamps. Never promote old links as fresh.
+      const published = item.publishedAt ? Date.parse(item.publishedAt) : NaN;
+      if (Number.isFinite(published) && (published > now + 86400000 || now - published > (entry.kind === "product" ? 14 : 7) * 86400000)) continue;
+      seen.add(item.url);
+      selected.push({ ...item, title: clip(entry.title,100), kind: entry.kind, summary: clip(entry.summary,180), reason: clip(entry.reason,120), topics: [...new Set((Array.isArray(entry.topics) ? entry.topics : []).map(t=>clip(t,32)).filter(Boolean))].slice(0,3) });
+      if (selected.length === 16) break;
+    }
+    return selected;
+  }
+  function feedbackExamples(feedback) {
+    return Object.values(feedback || {}).filter(r => r && (r.vote === 1 || r.vote === -1)).sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,40)
+      .map(({vote,title,topics,source})=>({vote,title,topics,source}));
+  }
+  function applyFeedback(feedback, item, vote, now = Date.now()) {
+    const next = { ...feedback }, key = normalizeUrlForDuplicate(item.url);
+    if (![1,-1,0].includes(vote)) throw new Error("Invalid feedback");
+    if (vote === 0 || next[key]?.vote === vote) delete next[key];
+    else next[key] = { url:item.url, title:item.title, topics:item.topics, source:item.source, vote, updatedAt:now };
+    return Object.fromEntries(Object.entries(next).sort((a,b)=>(b[1].updatedAt||0)-(a[1].updatedAt||0)).slice(0,200));
+  }
+  return { SOURCES, browsingProfile, sourceCandidates, selectSources, buildEvidence, buildFeed, feedbackExamples, applyFeedback, publicUrl };
+});

@@ -845,7 +845,7 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "/" && !elements.shortcutDialog.open && !event.target.closest("input, textarea, select, [contenteditable]")) {
+    if (event.key === "/" && !document.querySelector("dialog[open]") && !event.target.closest("input, textarea, select, [contenteditable]")) {
       event.preventDefault();
       elements.search.focus();
     }

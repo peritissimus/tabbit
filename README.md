@@ -87,12 +87,23 @@ The request runs in the background worker and the plan is stored, so reopening t
 
 If the AI call fails or returns invalid JSON, Tabbit falls back to a built-in heuristic that groups by domain (GitHub → Code, MDN → Docs, slack/gmail/linear → Work, etc.). The localhost override applies in both paths.
 
+## Personalized discovery feed
+
+**Worth discovering** keeps the existing work layout and shows four picks at a time: official AI-lab announcements, news and products, with more behind **More picks**. **AI labs**, **News** and **Products** filter the saved edition. **Build feed** starts the first edition; **Refresh** explicitly rebuilds it.
+
+The worker summarizes the last 14 days of browsing on supported developer/news domains (domain, up to four titles, visits), then the selection model chooses from curated news and publisher surfaces. HN and Show HN use the public API for current links, submission timestamps, points and comments. Other selected sites (including Product Hunt, Techmeme and official announcement blogs) are read in the signed-in browser, up to twelve sources total, including all six official AI labs (OpenAI, Anthropic, Google DeepMind, Meta AI, xAI and Mistral). Unreadable or redirected sources are listed in **Sources**. Product Hunt uses its browser page; it does not use the licensed Product Hunt API.
+
+The writing model curates up to sixteen evidence-backed news/product items. URLs must come from links actually retrieved. HN dates are submission dates, not verified first-launch dates; undated browser links show **Date not provided**. Structured items older than seven days (news) or fourteen days (products) are rejected. Model editorial judgments about relevance, novelty and summaries still need user judgment.
+
+Thumbs up/down are saved locally, toggle off when clicked again, and feed the next source-selection and curation prompts. A downvoted URL is excluded from future editions; one vote does not ban an entire source. **Tune feed** saves instructions and an automatic-refresh toggle. After the first successful edition, refresh runs every six hours while Chrome is running. Failed attempts back off, an interrupted build restarts once, and closing a new tab never discards an edition or starts a fresh build by itself.
+
 ## Privacy
 
 - **Sent to OpenAI on each Organize**: tab IDs, tab titles, hostname + path (no query strings, no fragments), window ID, and your context line.
 - **Sent to OpenAI on each Brief build**: titles and hostname + path of up to 60 pages (open tabs first, then your top pages from the last 14 days of history), visit counts, your context line, and the visible text and links of the up to 8 pages it reads. Those pages are read signed in as you, so they can include private content. Nothing is sent until you click **Build** for the first time.
-- **Never sent**: page content outside a Brief build, your API key (it goes in the Authorization header to OpenAI only), session snapshots.
-- **Stored locally**: API key, model, context string, saved sessions, the latest brief. All in `chrome.storage.local`.
+- **Sent to OpenAI on each Discovery build**: the supported-domain browsing summary, feed instructions, up to 40 rated examples, and text/links from the selected news/product sources. The API key is used only for OpenAI authentication. Internal wildcard domains, local addresses, unsupported sites and authentication hops are excluded from the discovery profile.
+- **Never sent**: page content outside a Brief or Discovery build, your API key (it goes in the Authorization header to OpenAI only), session snapshots.
+- **Stored locally**: API key, model, context string, saved sessions, the latest brief, discovery edition/progress, feed instructions and up to 200 feedback records. All in `chrome.storage.local`.
 
 ## Development
 
@@ -114,6 +125,8 @@ The codebase is plain Manifest V3 — no bundler, no transpilation, no dependenc
 | `src/newtab.js` | New-tab controller: reads tabs and history, renders the dashboard and the stored brief, probes local servers. |
 | `src/background.js` | Service worker: builds the brief (page picking, reading, OpenAI calls), stores progress, resumes and schedules builds. |
 | `src/workspace.js` | Pure functions: history ranking, site categories, local server detection, page-reading rules, brief validation. Importable in Node for tests. |
+| `src/discovery.js` | Pure discovery source selection, browsing profile, evidence validation and feedback helpers. |
+| `src/discovery-view.js` | Compact discovery feed, filters, feedback and instructions UI. |
 | `tests/*.test.js` | Node `node:test` suites covering the organizer and workspace modules. |
 
 ## Permissions
