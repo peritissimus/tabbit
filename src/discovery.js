@@ -14,7 +14,7 @@
     { title: "Google DeepMind", lab: "Google DeepMind", url: "https://deepmind.google/discover/blog/", topics: ["AI", "models", "research"] },
     { title: "Google Developers Blog", lab: "Google AI", url: "https://developers.googleblog.com/", topics: ["AI", "Gemma", "on-device AI", "developer releases"] },
     { title: "Google AI Announcements", lab: "Google AI", url: "https://blog.google/innovation-and-ai/", topics: ["AI", "Gemini", "Gemma", "models"] },
-    { title: "Meta AI", lab: "Meta AI", url: "https://ai.meta.com/blog/", topics: ["AI", "open models", "research"] },
+    { title: "Meta AI", lab: "Meta AI", url: "https://research.meta.ai/", topics: ["AI", "models", "agents", "research"] },
     { title: "xAI News", lab: "xAI", url: "https://x.ai/news", topics: ["AI", "models", "agents"] },
     { title: "Mistral News", lab: "Mistral", url: "https://mistral.ai/news/", topics: ["AI", "open models", "voice"] },
     { title: "Hugging Face Blog", url: "https://huggingface.co/blog", topics: ["AI", "open source", "local models"] },

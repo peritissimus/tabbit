@@ -105,3 +105,17 @@ test('feed truncates after impact ranking rather than dropping a consequential l
   assert.equal(items.length,16);
   assert.equal(items[0].id,17);
 });
+
+test('Meta watchlist uses the current research site and retains Muse Wonder as a lab announcement', () => {
+  const sources = selectSources([], sourceCandidates([]));
+  const meta = sources.find(source => source.lab === 'Meta AI');
+  assert.equal(meta.url, 'https://research.meta.ai/');
+  const evidence = buildEvidence([{item: meta, ok: true, text: 'Latest from Meta AI Research', links: [{
+    title: 'Muse Wonder: A Frontier Model For Personal & Professional AI Agents',
+    url: 'https://research.meta.ai/blog/muse-wonder', publishedAt: '2026-10-12T00:00:00.000Z'
+  }]}]);
+  assert.equal(evidence.items[0].lab, 'Meta AI');
+  const feed = buildFeed({items: [{itemId: evidence.items[0].id, title: 'Muse Wonder', kind: 'product'}]}, evidence.items, {}, Date.parse('2026-10-13T00:00:00Z'));
+  assert.equal(feed.length, 1);
+  assert.equal(feed[0].url, 'https://research.meta.ai/blog/muse-wonder');
+});
