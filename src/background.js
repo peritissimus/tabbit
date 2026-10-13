@@ -6,6 +6,7 @@ importScripts(
   "organizer.js",
   "grouping-prompt.js",
   "organization-workflow.js",
+  "cleanup-workflow.js",
   "workspace.js",
   "discovery.js",
   "storage.js",
@@ -52,6 +53,7 @@ const feed = self.createTabbitFeedWorkflow({
 });
 const grouping = self.createTabbitGroupingWorkflow(dependencies);
 const organization = self.createTabbitOrganizationWorkflow({...dependencies, grouping, organizer:self.TabbitOrganizer, prompt:self.TabbitGroupingPrompt});
+const cleanup = self.createTabbitCleanupWorkflow({chrome, organizer:self.TabbitOrganizer, keys});
 const TICK_ALARM = "tabbit.tick",
   TICK_MINUTES = 30;
 
@@ -66,6 +68,12 @@ async function tick() {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "tabbit.cleanup") {
+    const windowId = _sender.tab?.windowId;
+    if (!Number.isInteger(windowId)) {sendResponse({error:"Open Clean up from a new tab."});return;}
+    cleanup.run(windowId,_sender.tab.id,message).then(result=>sendResponse({ok:true,result})).catch(error=>sendResponse({error:error.message}));
+    return true;
+  }
   if (message?.type === messages.organizeTabs) {
     const windowId = _sender.tab?.windowId;
     if (!Number.isInteger(windowId)) { sendResponse({error:"Open a new tab in the window you want to organize."}); return; }

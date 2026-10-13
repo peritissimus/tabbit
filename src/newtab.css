@@ -285,3 +285,27 @@ dialog::backdrop { background: rgba(0,0,0,.72); }
 #organizeTabs[aria-busy="true"]::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: organize-spin 900ms linear infinite; }
 @keyframes organize-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { #organizeTabs[aria-busy="true"]::before { animation: none; } }
+
+#cleanupDialog { width: min(680px, calc(100vw - 32px)); }
+#cleanupTitle { font-size: 20px; text-wrap: balance; }
+.cleanup-description { color: var(--text-dim); line-height: 1.55; text-wrap: pretty; }
+.cleanup-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 20px 0 12px; }
+.cleanup-toolbar select { margin-left: 8px; min-height: 40px; border-radius: 10px; }
+.cleanup-list { max-height: 45dvh; overflow: auto; }
+.cleanup-list fieldset { border: 0; padding: 8px 0; margin: 0; min-width: 0; }
+.cleanup-list legend label, .cleanup-row { display: flex; align-items: center; gap: 12px; min-height: 40px; cursor: pointer; }
+.cleanup-list legend { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cleanup-row { padding: 8px 12px; border-radius: 12px; }
+.cleanup-row:hover { background: rgba(255,255,255,.04); }
+.cleanup-row span { min-width: 0; }
+.cleanup-row strong, .cleanup-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cleanup-row strong { font-size: 13px; font-weight: 500; }
+.cleanup-row small { color: var(--text-dim); margin-top: 4px; font-size: 11px; }
+.cleanup-list input { flex: 0 0 auto; accent-color: #e8b97f; }
+#cleanupDialog button { min-height: 40px; }
+#cleanupStatus { min-height: 40px; font-size: 12px; line-height: 1.5; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+#cleanupDialog [hidden] { display: none; }
+@media (max-width: 480px) { .cleanup-toolbar { align-items: start; flex-direction: column; } }
+#cleanupDialog > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+#cleanupDialog .editor-footer { justify-content: flex-end; }
+#cleanupRestore { margin-right: auto; }

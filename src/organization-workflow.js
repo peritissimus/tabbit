@@ -9,12 +9,7 @@
     async function organize(windowId, initiatingTabId) {
       const key = `${keys.organization}.${windowId}`;
       const startedAt = Date.now();
-      let applied = 0, closedNewTabs = 0;
-      const isNewTab = tab => {
-        const url = tab.pendingUrl || tab.url || "";
-        return /^chrome:\/\/(newtab|new-tab-page)\/?(?:[?#].*)?$/.test(url) ||
-          url.split(/[?#]/)[0] === chrome.runtime?.getURL?.("src/newtab.html");
-      };
+      let applied = 0;
       const save = (value) =>
         chrome.storage.local.set({ [key]: { windowId, startedAt, ...value } });
       try {
@@ -52,12 +47,21 @@
           : organizer.buildGroupingPlan(current, options);
         // AI can omit valid IDs. Cover those tabs locally instead of silently
         // leaving them out; singletons get a meaningful category/domain group.
-        const assigned = new Set(plan.groups.flatMap(group => group.tabs.map(tab => tab.id)));
-        const fallback = organizer.buildGroupingPlan(current.filter(tab => !assigned.has(tab.id)), {
-          ...options, includeSingletons: true, minGroupSize: 1,
-        });
+        const assigned = new Set(
+          plan.groups.flatMap((group) => group.tabs.map((tab) => tab.id)),
+        );
+        const fallback = organizer.buildGroupingPlan(
+          current.filter((tab) => !assigned.has(tab.id)),
+          {
+            ...options,
+            includeSingletons: true,
+            minGroupSize: 1,
+          },
+        );
         for (const group of fallback.groups) {
-          const existing = plan.groups.find(candidate => candidate.title === group.title);
+          const existing = plan.groups.find(
+            (candidate) => candidate.title === group.title,
+          );
           if (existing) existing.tabs.push(...group.tabs);
           else plan.groups.push(group);
         }
@@ -73,30 +77,15 @@
           });
           applied++;
         }
-        // Re-read after the AI call: a former new tab may now be a real page.
-        const latestTabs = await chrome.tabs.query({ windowId });
-        const newTabs = latestTabs.filter(isNewTab);
-        const keeper = newTabs.find(tab => tab.id === initiatingTabId) ||
-          newTabs.find(tab => tab.active) || newTabs[0];
-        for (const tab of newTabs.filter(tab => tab.id !== keeper?.id && !tab.pinned)) {
-          // Check pending navigation immediately before removing each duplicate.
-          const live = await chrome.tabs.get(tab.id).catch(() => null);
-          if (live && live.windowId === windowId && !live.pinned && isNewTab(live)) {
-            await chrome.tabs.remove(live.id);
-            closedNewTabs++;
-          }
-        }
-        const pinnedCount = latestTabs.filter(tab => tab.pinned).length;
         await save({
           status: "done",
           groupedTabs: current.length,
-          closedNewTabs,
-          pinnedCount,
-          message: (applied
-            ? `A little tidier · ${current.length} tabs in ${applied} ${applied === 1 ? "group" : "groups"}`
-            : "No matching tabs to group in this window") +
-            (closedNewTabs ? ` · ${closedNewTabs} extra new tabs closed` : "") +
-            (pinnedCount ? ` · ${pinnedCount} pinned left alone` : ""),
+
+          message:
+            (applied
+              ? `A little tidier · ${current.length} tabs in ${applied} ${applied === 1 ? "group" : "groups"}`
+              : "No matching tabs to group in this window") +
+            " · pinned tabs left alone",
         });
       } catch (error) {
         await save({

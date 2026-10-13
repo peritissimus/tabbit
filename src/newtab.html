@@ -30,6 +30,7 @@
         </div>
 
         <div class="top-actions">
+          <button id="cleanupTabs" class="ghost-button" type="button">Clean up</button>
           <button id="organizeTabs" class="ghost-button" type="button" title="Group tabs in this window; pinned tabs stay put">Organize tabs</button>
           <button id="openSettings" class="ghost-button" type="button">Settings</button>
         </div>
@@ -103,6 +104,14 @@
       </div>
     </main>
 
+    <dialog id="cleanupDialog" aria-labelledby="cleanupTitle">
+      <header class="section-heading"><h2 id="cleanupTitle">A little breathing room</h2><button id="cleanupDismiss" class="ghost-button" type="button">Done</button></header>
+      <p class="cleanup-description">Review tabs in this window before closing them. Pinned, active and playing tabs stay put. A recovery session is saved first; restoring reopens URLs, not unsaved page content.</p>
+      <div class="cleanup-toolbar"><label>Unused for <select id="cleanupDays"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="14">14 days</option><option value="30">30 days</option></select></label><button id="cleanupRefresh" class="ghost-button" type="button">Refresh preview</button></div>
+      <div id="cleanupList" class="cleanup-list"></div>
+      <p id="cleanupStatus" role="status" aria-live="polite"></p>
+      <footer class="editor-footer"><button id="cleanupRestore" class="ghost-button" type="button" hidden>Restore last cleanup</button><button id="cleanupConfirm" class="primary-button" type="button" disabled>Close selected tabs</button></footer>
+    </dialog>
     <dialog id="feedDialog" aria-labelledby="feedDialogTitle">
       <form id="feedForm">
         <header class="editor-header"><div><h2 id="feedDialogTitle">Tune your discovery feed</h2><p>Your instructions and thumbs guide the next edition. Impact is an editorial estimate, not a verified measurement.</p></div><button id="feedClose" class="icon-button" type="button" aria-label="Close feed settings">×</button></header>
@@ -190,6 +199,7 @@
     <script src="./newtab-search-view.js"></script>
     <script src="./newtab-organization-view.js"></script>
     <script src="./newtab.js"></script>
+    <script src="./cleanup-view.js"></script>
     <script src="./discovery-view.js"></script>
   </body>
 </html>
