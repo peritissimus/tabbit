@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [],
+    "skipLibCheck": true
+  },
+  "include": [
+    "types/*.d.ts",
+    "src/contracts.js",
+    "src/storage.js",
+    "src/build-lifecycle.js",
+    "src/ai-transport.js",
+    "src/page-reader.js",
+    "src/community-reader.js",
+    "src/brief-workflow.js",
+    "src/feed-workflow.js",
+    "src/grouping-workflow.js",
+    "src/newtab-*-view.js",
+    "src/popup-settings-view.js"
+  ]
+}

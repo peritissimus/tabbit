@@ -33,8 +33,8 @@ test("worker migrates saved settings and routes actual grouping, selection and b
   context.self = context;
   context.importScripts = (...files) => files.forEach((file) => vm.runInContext(fs.readFileSync(path.join(__dirname, "../src", file), "utf8"), context));
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../src/background.js"), "utf8"), context);
-  await vm.runInContext('runPlan({ requestBody: { model: "stale-model", messages: [] }, tabIds: [], windowId: 1 })', context);
-  await vm.runInContext("runBuild(1)", context);
+  await vm.runInContext('grouping.run({ requestBody: { model: "stale-model", messages: [] }, tabIds: [], windowId: 1 })', context);
+  await vm.runInContext("brief.start(1)", context);
   assert.deepEqual(requests.map((body) => body.model), ["gpt-6-luna", "gpt-6-luna", "gpt-6.1-sol"]);
   assert.deepEqual(requests.map((body) => body.reasoning_effort), ["low", "low", "medium"]);
   assert.equal(storage["tabbit.plan"].status, "done");

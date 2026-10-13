@@ -29,55 +29,55 @@ function harness() {
   context.self=context;
   context.importScripts=(...files)=>files.forEach(file=>vm.runInContext(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'),context));
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/background.js'),'utf8'),context);
-  vm.runInContext('readPages = async targets => targets.map(item=>({item,ok:false,error:"Source unavailable"}))',context);
+  vm.runInContext('reader.readPages = async targets => targets.map(item=>({item,ok:false,error:"Source unavailable"}))',context);
   return {storage,requests,updates,context,run:code=>vm.runInContext(code,context)};
 }
 test('worker persists a single feed build, uses real community evidence and reports unavailable sources',async()=>{
   const h=harness();
-  await h.run('Promise.all([startFeed(), startFeed()])');
+  await h.run('Promise.all([feed.start(), feed.start()])');
   assert.deepEqual(h.requests.map(r=>r.model),['gpt-6-luna','gpt-6.1-sol']);
   assert.deepEqual(Array.from(h.storage['tabbit.feed'].items,i=>i.url),['https://framework.example/','https://tool.example/']);
   assert.equal(h.storage['tabbit.feed'].items[0].score,120);
   assert.equal(h.storage['tabbit.feed'].sources.find(s=>s.title==='Product Hunt').ok,false);
   assert.equal(h.storage['tabbit.feedBuild'].status,'idle');
   assert.deepEqual(h.updates.filter(v=>v['tabbit.feedBuild']).map(v=>v['tabbit.feedBuild'].phase),['choosing','reading','curating',null]);
-  await h.run('tickDiscovery()');assert.equal(h.requests.length,2,'reopening a fresh edition makes no AI request');
+  await h.run('feed.tick()');assert.equal(h.requests.length,2,'reopening a fresh edition makes no AI request');
 });
 test('feedback writes serialize and influence the next source selection and edition',async()=>{
-  const h=harness();await h.run('startFeed()');
-  await h.run(`Promise.all([updateFeedPreference({type:"tabbit.feedFeedback",url:"https://tool.example/",vote:1}),updateFeedPreference({type:"tabbit.feedFeedback",url:"https://tool.example/",vote:-1})])`);
+  const h=harness();await h.run('feed.start()');
+  await h.run(`Promise.all([feed.updatePreference({type:"tabbit.feedFeedback",url:"https://tool.example/",vote:1}),feed.updatePreference({type:"tabbit.feedFeedback",url:"https://tool.example/",vote:-1})])`);
   assert.equal(Object.values(h.storage['tabbit.feedFeedback'])[0].vote,-1);
-  await h.run('startFeed()');
+  await h.run('feed.start()');
   assert.equal(h.storage['tabbit.feed'].items.length,1);
   assert.equal(JSON.parse(h.requests[2].messages[1].content).feedback[0].vote,-1);
-  await assert.rejects(h.run('updateFeedPreference({type:"tabbit.feedFeedback",url:"https://unknown.example/",vote:1})'));
+  await assert.rejects(h.run('feed.updatePreference({type:"tabbit.feedFeedback",url:"https://unknown.example/",vote:1})'));
 });
 test('failed builds retain the old edition and stale failed attempts back off',async()=>{
-  const h=harness();await h.run('startFeed()');
+  const h=harness();await h.run('feed.start()');
   const old=h.storage['tabbit.feed'];delete h.storage['tabbit.aiSettings'].apiKey;
-  await h.run('startFeed()');
+  await h.run('feed.start()');
   assert.equal(h.storage['tabbit.feed'],old);
   assert.equal(h.storage['tabbit.feedBuild'].status,'failed');
   old.createdAt=Date.now()-8*3600000;
-  await h.run('tickDiscovery()');assert.equal(h.requests.length,2);
+  await h.run('feed.tick()');assert.equal(h.requests.length,2);
 });
 test('stopped builds report bounded interruption and auto-refresh respects preferences',async()=>{
   const h=harness();
   h.storage['tabbit.feedBuild']={status:'running',attempt:2};
-  await h.run('tickDiscovery()');
+  await h.run('feed.tick()');
   assert.equal(h.storage['tabbit.feedBuild'].status,'failed');
   h.storage['tabbit.feed']={createdAt:1,items:[]};
   h.storage['tabbit.feedBuild']={status:'idle',finishedAt:1};
   h.storage['tabbit.feedPreferences']={autoRefresh:false};
-  await h.run('tickDiscovery()');assert.equal(h.requests.length,0);
+  await h.run('feed.tick()');assert.equal(h.requests.length,0);
 });
 test('source reads reject cross-host redirects and challenge pages before sending content',async()=>{
   const h=harness();
   h.context.chrome.scripting={executeScript:async()=>[{result:{url:'https://login.other.example/',title:'Login',text:'Private'.repeat(30),links:[]}}]};
-  const redirected=await h.run('readTab(1,{url:"https://www.producthunt.com/",discovery:true})');
+  const redirected=await h.run('reader.readTab(1,{url:"https://www.producthunt.com/",discovery:true})');
   assert.equal(redirected.ok,false);
   h.context.chrome.scripting.executeScript=async()=>[{result:{url:'https://www.producthunt.com/',title:'Just a moment...',text:'Verify you are human'.repeat(10),links:[]}}];
-  const blocked=await h.run('readTab(1,{url:"https://www.producthunt.com/",discovery:true})');
+  const blocked=await h.run('reader.readTab(1,{url:"https://www.producthunt.com/",discovery:true})');
   assert.equal(blocked.ok,false);
 });
 
@@ -86,8 +86,8 @@ test('publisher pages start while community requests are still pending', async (
   let release;
   h.context.communityGate = new Promise(resolve => { release = resolve; });
   h.context.publisherStarted = false;
-  h.run('fetchHnSource = async item => { await communityGate; return {item,ok:false}; }; readPages = async targets => { publisherStarted = true; return targets.map(item=>({item,ok:true,text:"Release",links:[{title:"New release",url:"https://framework.example/"}]})); };');
-  const pending = h.run('startFeed()');
+  h.run('communityReader.fetchHnSource = async item => { await communityGate; return {item,ok:false}; }; reader.readPages = async targets => { publisherStarted = true; return targets.map(item=>({item,ok:true,text:"Release",links:[{title:"New release",url:"https://framework.example/"}]})); };');
+  const pending = h.run('feed.start()');
   try {
     for (let i=0; i<30 && !h.context.publisherStarted; i++) await new Promise(resolve=>setTimeout(resolve,1));
     assert.equal(h.context.publisherStarted, true);
@@ -98,14 +98,12 @@ test('publisher pages start while community requests are still pending', async (
 
 test('open brief pages read concurrently and retain their original order', async () => {
   const h = harness();
-  // Restore production reader, which the shared feed harness normally replaces.
-  const source = fs.readFileSync(path.join(__dirname,'../src/background.js'),'utf8');
-  vm.runInContext(source.slice(source.indexOf('async function readPages('), source.indexOf('\nfunction describeItems(')), h.context);
+  h.run('reader.readPages = self.createTabbitPageReader({chrome, organizer:self.TabbitOrganizer, discovery:self.TabbitDiscovery}).readPages');
   let release;
   h.context.readGate = new Promise(resolve=>{release=resolve;});
   h.context.readIds = [];
-  h.run('readTab = async (id,item) => { readIds.push(id); await readGate; return {item,ok:true}; };');
-  const pending = h.run('readPages([{id:1,url:"https://one.example/"},{id:2,url:"https://two.example/"}],[{id:10,url:"https://one.example/",status:"complete"},{id:20,url:"https://two.example/",status:"complete"}])');
+  h.context.chrome.scripting = {executeScript: async ({target}) => { h.context.readIds.push(target.tabId); await h.context.readGate; return [{result:{title:'Page', text:'Content '.repeat(20), links:[]}}]; }};
+  const pending = h.run('reader.readPages([{id:1,url:"https://one.example/"},{id:2,url:"https://two.example/"}],[{id:10,url:"https://one.example/",status:"complete"},{id:20,url:"https://two.example/",status:"complete"}])');
   try { assert.deepEqual(Array.from(h.context.readIds), [10,20]); }
   finally { release(); }
   assert.deepEqual(Array.from(await pending,page=>page.item.id), [1,2]);
@@ -123,7 +121,8 @@ test('HN pool fills free slots without exceeding five requests or reordering sto
     active--;
     return Response.json({type:'story',title:`Story ${id}`,url:`https://example.com/${id}`,time:1});
   };
-  const pending = h.run('fetchHnSource({title:"Hacker News"})');
+  h.run('communityReader.fetchHnSource = self.createTabbitCommunityReader({fetch}).fetchHnSource');
+  const pending = h.run('communityReader.fetchHnSource({title:"Hacker News"})');
   const waitFor = async condition => {
     for(let i=0;i<30&&!condition();i++) await new Promise(resolve=>setTimeout(resolve,1));
     assert.ok(condition());

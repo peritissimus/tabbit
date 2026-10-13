@@ -43,8 +43,8 @@ test("worker sends grouping, selection and brief requests to the Codex host with
     };
   });
 
-  await vm.runInContext('runPlan({ requestBody: { messages: [{ role: "user", content: "tabs" }] }, tabIds: [], windowId: 1 })', context);
-  await vm.runInContext("runBuild(1)", context);
+  await vm.runInContext('grouping.run({ requestBody: { messages: [{ role: "user", content: "tabs" }] }, tabIds: [], windowId: 1 })', context);
+  await vm.runInContext("brief.start(1)", context);
   assert.deepEqual(requests.map((request) => request.host), Array(3).fill("dev.tabbit.codex"));
   assert.deepEqual(requests.map((request) => request.model), ["gpt-6-luna", "gpt-6-luna", "gpt-6.1-sol"]);
   assert.deepEqual(requests.map((request) => request.effort), ["low", "low", "medium"]);
@@ -69,7 +69,7 @@ test("worker explains how to install the bridge when the host is missing", async
     return port;
   });
 
-  const plan = await vm.runInContext('runPlan({ requestBody: { messages: [] }, tabIds: [], windowId: 1 })', context);
+  const plan = await vm.runInContext('grouping.run({ requestBody: { messages: [] }, tabIds: [], windowId: 1 })', context);
   assert.equal(plan.status, "failed");
   assert.match(plan.error, /npm run install-codex-host/);
 });
@@ -81,7 +81,7 @@ test("a failed native send releases its port immediately", async () => {
     disconnect() { disconnected = true; },
     postMessage() { throw new Error("Port disconnected before send"); }
   }));
-  await assert.rejects(vm.runInContext('requestCodexJson([], {provider:"codex"}, "brief", 100)', context), /Port disconnected/);
+  await assert.rejects(vm.runInContext('ai.requestCodexJson([], {provider:"codex"}, "brief", 100)', context), /Port disconnected/);
   assert.equal(disconnected, true);
 });
 
@@ -103,8 +103,8 @@ for (const kind of ["brief", "feed"]) {
     context.chrome.alarms.get = async () => ({name:"tabbit.tick"});
     context.chrome.windows = {remove:async()=>{}};
     // Browser reads are fixtures; the worker and native transport lifecycle are real code.
-    vm.runInContext(`readPages = async targets => targets.map(item => ({item,ok:true,text:"Release is available",links:[{title:"New release",url:"https://example.com/release"}]}));
-      fetchHnSource = async item => ({item,ok:true,text:"New release",links:[{title:"New release",url:"https://example.com/release"}]});`, context);
+    vm.runInContext(`reader.readPages = async targets => targets.map(item => ({item,ok:true,text:"Release is available",links:[{title:"New release",url:"https://example.com/release"}]}));
+      communityReader.fetchHnSource = async item => ({item,ok:true,text:"New release",links:[{title:"New release",url:"https://example.com/release"}]});`, context);
     const run = code => vm.runInContext(code, context);
     const waitFor = async predicate => {
       for (let i=0;i<100;i++) {
@@ -113,7 +113,7 @@ for (const kind of ["brief", "feed"]) {
       }
       assert.fail("Worker did not reach expected phase");
     };
-    const start = kind === "brief" ? "startBuild()" : "startFeed()";
+    const start = kind === "brief" ? "brief.start()" : "feed.start()";
     const stateKey = kind === "brief" ? "tabbit.build" : "tabbit.feedBuild";
     const resultKey = kind === "brief" ? "tabbit.brief" : "tabbit.feed";
     const pending = run(start);

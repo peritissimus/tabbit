@@ -1,3 +1,4 @@
+const {keys, messages} = window.TabbitContracts;
 const {
   TAB_GROUP_ID_NONE,
   buildGroupingPlanFromAiGroups,
@@ -6,10 +7,10 @@ const {
   findUnusedTabs
 } = window.TabbitOrganizer;
 
-const STORAGE_KEY = "tabbit.sessions";
-const AI_SETTINGS_KEY = "tabbit.aiSettings";
-const UI_STATE_KEY = "tabbit.uiState";
-const PLAN_KEY = "tabbit.plan";
+const STORAGE_KEY = keys.sessions;
+const AI_SETTINGS_KEY = keys.aiSettings;
+const UI_STATE_KEY = keys.uiState;
+const PLAN_KEY = keys.plan;
 const PLAN_PENDING_MAX_MS = 2 * 60 * 1000;
 const { DEFAULT_AI_MODEL, DEFAULT_BRIEF_MODEL, MODEL_ROUTING_VERSION, normalizeAiSettings, buildJsonRequest, hasAiAccess } = window.TabbitAiConfig;
 const TAB_GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
@@ -154,66 +155,6 @@ async function setSessions(sessions) {
   await chrome.storage.local.set({ [STORAGE_KEY]: sessions });
 }
 
-async function getStoredAiSettings() {
-  const result = await chrome.storage.local.get(AI_SETTINGS_KEY);
-  const settings = result[AI_SETTINGS_KEY] || {};
-
-  const normalized = normalizeAiSettings(settings);
-  if (settings.modelRoutingVersion !== MODEL_ROUTING_VERSION) {
-    await chrome.storage.local.set({ [AI_SETTINGS_KEY]: normalized });
-  }
-  return normalized;
-}
-
-function readAiSettingsFromForm() {
-  const typedApiKey = elements.aiApiKey.value.trim();
-  const storedApiKey = state.aiSettings?.apiKey || "";
-  const typedModel = elements.aiModel.value.trim();
-  const typedContext = elements.aiContext.value;
-
-  return {
-    provider: elements.aiProvider.value === "codex" ? "codex" : "openai",
-    apiKey: typedApiKey || storedApiKey,
-    model: typedModel || DEFAULT_AI_MODEL,
-    briefModel: elements.aiBriefModel.value.trim() || DEFAULT_BRIEF_MODEL,
-    modelRoutingVersion: MODEL_ROUTING_VERSION,
-    context: typedContext.trim().slice(0, 600)
-  };
-}
-
-async function saveAiSettings() {
-  const previousHadKey = hasAiAccess(state.aiSettings);
-  const nextSettings = readAiSettingsFromForm();
-  state.aiSettings = nextSettings;
-  await chrome.storage.local.set({ [AI_SETTINGS_KEY]: nextSettings });
-  renderAiSettings(nextSettings);
-
-  const hasKey = hasAiAccess(nextSettings);
-  setKeyState(hasKey);
-
-  if (hasKey && !previousHadKey) {
-    setAiExpanded(false);
-    await replan();
-  }
-}
-
-function renderAiSettings(settings) {
-  elements.aiModel.value = settings.model || DEFAULT_AI_MODEL;
-  elements.aiBriefModel.value = settings.briefModel || DEFAULT_BRIEF_MODEL;
-  elements.aiContext.value = settings.context || "";
-  elements.aiProvider.value = settings.provider;
-  elements.aiApiKey.closest(".field").hidden = settings.provider === "codex";
-  elements.aiCodexNote.hidden = settings.provider !== "codex";
-  elements.aiApiKey.value = "";
-  elements.aiApiKey.placeholder = settings.apiKey ? "Saved locally" : "sk-...";
-  renderAiSummary();
-}
-
-async function loadAiSettings() {
-  state.aiSettings = await getStoredAiSettings();
-  renderAiSettings(state.aiSettings);
-}
-
 function tabSubtitle(tabs) {
   return tabs
     .slice(0, 3)
@@ -294,6 +235,8 @@ function renderSessions() {
     .join("");
 }
 
+const {readAiSettingsFromForm, saveAiSettings, renderAiSettings, loadAiSettings} = window.createTabbitPopupSettings({state, elements, chrome, config:window.TabbitAiConfig, keys, setKeyState, setAiExpanded, replan, renderAiSummary});
+
 function escapeHtml(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -370,7 +313,7 @@ async function requestAiGroups(tabs, settings, options) {
   const requestBody = buildJsonRequest(messages, settings, "grouping");
 
   const plan = await chrome.runtime.sendMessage({
-    type: "tabbit.requestPlan",
+    type: messages.requestPlan,
     requestBody,
     tabIds: tabs.filter((tab) => window.TabbitOrganizer.isGroupableTab(tab, options)).map((tab) => tab.id),
     windowId: tabs[0]?.windowId

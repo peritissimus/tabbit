@@ -1,3 +1,4 @@
+const {keys, messages} = window.TabbitContracts;
 const {
   TAB_GROUP_ID_NONE,
   isGroupableTab,
@@ -8,20 +9,18 @@ const {
 const { DEFAULT_HISTORY_DAYS, buildWorkspace, isAuthenticationUrl, parseInternalDomains } = window.TabbitWorkspace;
 
 const { MAX_SHORTCUTS, readShortcuts, validateShortcuts } = window.TabbitNewtabSettings;
-const SHORTCUTS_KEY = "tabbit.shortcuts";
+const SHORTCUTS_KEY = keys.shortcuts;
 
-const STORAGE_KEY = "tabbit.sessions";
-const AI_SETTINGS_KEY = "tabbit.aiSettings";
-const BRIEF_KEY = "tabbit.brief";
-const BUILD_KEY = "tabbit.build";
-const SNAPSHOT_KEY = "tabbit.newtabSnapshot";
+const STORAGE_KEY = keys.sessions;
+const AI_SETTINGS_KEY = keys.aiSettings;
+const BRIEF_KEY = keys.brief;
+const BUILD_KEY = keys.build;
+const SNAPSHOT_KEY = keys.newtabSnapshot;
 const SNAPSHOT_VERSION = 2;
 const { DEFAULT_AI_MODEL, DEFAULT_BRIEF_MODEL, MODEL_ROUTING_VERSION, normalizeAiSettings, buildJsonRequest, hasAiAccess } = window.TabbitAiConfig;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HISTORY_MAX_RESULTS = 5000;
 const CARD_LINK_LIMIT = 6;
-const RESULT_LIMIT = 12;
-const PROBE_TIMEOUT_MS = 1500;
 
 const elements = {
   board: document.querySelector("#board"),
@@ -86,6 +85,13 @@ const state = {
   workspace: { categories: [], localServers: [], pages: [], siteCount: 0 },
   workspaceReady: false
 };
+
+const viewDependencies = {state, elements, chrome, document, keys};
+const {renderBrief, buildBrief} = window.createTabbitBriefView({...viewDependencies, timing:window.TabbitBuildTiming, config:window.TabbitAiConfig, messages, formatAge, hostOf, linkHtml, cardHtml, escapeHtml, openTabAttributes, normalizeUrlForDuplicate});
+const {bindSettings} = window.createTabbitSettingsView({...viewDependencies, config:window.TabbitAiConfig, renderBrief});
+const {bindShortcutEditor} = window.createTabbitShortcutsView({...viewDependencies, shortcuts:window.TabbitNewtabSettings, escapeHtml, hostOf, renderQuickLinks});
+const {renderLocalServers, probeLocalServers} = window.createTabbitServersView({...viewDependencies, fetch, isAuthenticationUrl, isLocalhostTab, escapeHtml, openTabAttributes, saveSnapshot});
+const {renderResults, submitSearch} = window.createTabbitSearchView({...viewDependencies, window, isGroupableTab, normalizeUrlForDuplicate, hostOf, linkHtml, focusTab});
 
 function escapeHtml(value) {
   return String(value || "")
@@ -277,168 +283,6 @@ function renderHeader() {
   elements.dateLine.textContent = new Intl.DateTimeFormat(undefined, { dateStyle: "full" }).format(now);
 }
 
-function buildStatusText() {
-  const { brief, build } = state;
-
-  if (build?.status === "running") {
-    const phases = {
-      choosing: "Choosing pages to read",
-      history: "Reading history",
-      reading: `Reading ${build.pageCount || 0} pages`,
-      writing: "Writing brief"
-    };
-    return `${phases[build.phase] || "Building"}…`;
-  }
-
-  if (build?.status === "failed" && build.finishedAt > (brief?.createdAt || 0)) {
-    return `Failed: ${build.error || "unknown error"}`;
-  }
-
-  return brief ? `Built ${formatAge(brief.createdAt)}` : "";
-}
-
-function sourcesText(sources) {
-  if (!Array.isArray(sources) || sources.length === 0) {
-    return "";
-  }
-
-  const failed = sources.filter((source) => !source.ok);
-  const read = `Read ${sources.length - failed.length} of ${sources.length} pages`;
-  return failed.length ? `${read}. Could not read: ${failed.map((source) => hostOf(source.url)).join(", ")}` : read;
-}
-
-function renderBrief() {
-  const hasKey = hasAiAccess(state.aiSettings);
-  const brief = state.brief;
-  const isRunning = state.build?.status === "running";
-
-  elements.briefButton.hidden = !hasKey;
-  elements.briefButton.disabled = isRunning;
-  elements.briefButton.textContent = brief ? "Rebuild" : "Build";
-  window.TabbitBuildTiming.render(document.getElementById("briefTiming"), state.build);
-  elements.briefStatus.textContent = buildStatusText();
-  elements.briefStatus.classList.toggle("is-processing", isRunning);
-  elements.brief.setAttribute("aria-busy", String(isRunning));
-
-  if (!brief) {
-    if (isRunning) {
-      elements.brief.innerHTML =
-        '<div class="loading-lines" aria-hidden="true"><span></span><span></span><span></span></div><div class="empty">Building your brief. You can close this tab; it keeps going in the background.</div>';
-      return;
-    }
-
-    elements.brief.innerHTML = hasKey
-      ? '<div class="empty">Build a brief to see what needs your attention and the work threads you have in flight.</div>'
-      : '<div class="empty">Open Settings to add an OpenAI key or use your Codex subscription, then build an AI brief of your work threads.</div>';
-    return;
-  }
-
-  const attention = (brief.attention || [])
-    .map((entry) => linkHtml({ title: entry.text, url: entry.url, detail: hostOf(entry.url) }))
-    .join("");
-  const threads = brief.threads
-    .map((thread) => cardHtml({ title: thread.title, note: thread.note, links: thread.links }))
-    .join("");
-  const sources = sourcesText(brief.sources);
-
-  elements.brief.innerHTML = `
-    ${(brief.attention || []).length
-      ? `<a class="brief-takeaway" href="${escapeHtml(brief.attention[0].url)}"${openTabAttributes(state.openByUrl.get(normalizeUrlForDuplicate(brief.attention[0].url)))}><span class="takeaway-label">Worth a look</span><span>${escapeHtml(brief.attention[0].text)}</span><span aria-hidden="true">↗</span></a>`
-      : `<p class="brief-headline">${escapeHtml(brief.headline || "No attention items in your latest brief.")}</p>`}
-    <button class="brief-toggle" type="button" aria-expanded="${state.briefExpanded}" aria-controls="briefDetails" data-brief-toggle>
-      ${state.briefExpanded ? "Hide details" : `View brief · ${(brief.attention || []).length} attention items · ${brief.threads.length} threads`}
-      <span aria-hidden="true">${state.briefExpanded ? "−" : "+"}</span>
-    </button>
-    <div id="briefDetails"${state.briefExpanded ? "" : " hidden"}>
-    ${(brief.attention || []).length && brief.headline ? `<p class="brief-headline">${escapeHtml(brief.headline)}</p>` : ""}
-    ${attention ? `<div class="attention"><h3 class="attention-title">Needs attention</h3>${attention}</div>` : ""}
-    ${threads ? `<div class="card-grid">${threads}</div>` : '<div class="empty">No clear work threads right now.</div>'}
-    ${sources ? `<p class="brief-sources">${escapeHtml(sources)}</p>` : ""}
-    </div>
-  `;
-}
-
-function getLocalServers() {
-  const servers = state.workspace.localServers.filter((server) => !isAuthenticationUrl(server.url));
-  const openByOrigin = new Map();
-
-  for (const tab of state.tabs) {
-    if (!isLocalhostTab(tab) || isAuthenticationUrl(tab.url)) {
-      continue;
-    }
-
-    const parsed = new URL(tab.url);
-
-    if (openByOrigin.has(parsed.origin)) {
-      continue;
-    }
-
-    openByOrigin.set(parsed.origin, tab);
-
-    if (!servers.some((server) => server.origin === parsed.origin)) {
-      servers.unshift({ origin: parsed.origin, label: parsed.host, title: tab.title, url: tab.url });
-    }
-  }
-
-  return servers.map((server) => ({ ...server, openTab: openByOrigin.get(server.origin) }));
-}
-
-function serverHtml(server) {
-  const status = state.serverStatus.get(server.origin) || "unknown";
-  const label = status === "up" ? "Running" : status === "down" ? "Offline" : "Not checked";
-  return `<a class="server" href="${escapeHtml(server.url)}"${openTabAttributes(server.openTab)} title="${escapeHtml(server.origin)} · ${label}">
-    <span class="status-dot" data-status="${status}"></span>
-    <span class="server-copy"><span class="server-title">${escapeHtml(server.title || server.label)}</span><span class="server-label">${escapeHtml(server.label)}</span></span>
-    <span class="server-state">${label}</span>
-  </a>`;
-}
-
-function renderLocalServers() {
-  const servers = getLocalServers();
-  const running = servers.filter((server) => state.serverStatus.get(server.origin) === "up");
-  const other = servers.filter((server) => state.serverStatus.get(server.origin) !== "up");
-  elements.localServers.innerHTML = running.map(serverHtml).join("") || (state.workspaceReady
-    ? '<p class="server-empty">No running servers detected.</p>' : "");
-  elements.otherServers.hidden = other.length === 0;
-  elements.otherServersSummary.textContent = `Other servers · ${other.length}`;
-  elements.otherServerList.innerHTML = other.map(serverHtml).join("");
-}
-
-// Each server is checked once per page load. The stored status is shown in
-// the meantime, and the list is only redrawn if a status actually changed.
-async function probeLocalServers() {
-  // Chrome refuses requests to 0.0.0.0, so those stay "unknown" rather than "down".
-  const pending = getLocalServers().filter(
-    (server) => !state.probedOrigins.has(server.origin) && !server.origin.includes("//0.0.0.0")
-  );
-  let changed = false;
-
-  await Promise.all(
-    pending.map(async (server) => {
-      state.probedOrigins.add(server.origin);
-      let status = "up";
-
-      try {
-        await fetch(server.origin, {
-          cache: "no-store",
-          mode: "no-cors",
-          signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
-        });
-      } catch (_error) {
-        status = "down";
-      }
-
-      changed = changed || state.serverStatus.get(server.origin) !== status;
-      state.serverStatus.set(server.origin, status);
-    })
-  );
-
-  if (changed) {
-    renderLocalServers();
-    saveSnapshot();
-  }
-}
-
 function renderOpenGroups() {
   const tabs = state.tabs.filter((tab) => isGroupableTab(tab, { includePinned: true }));
   const toLink = (tab) => ({ title: tab.title, url: tab.url, detail: hostOf(tab.url) });
@@ -516,56 +360,6 @@ function renderSessions() {
     .join("");
 }
 
-function findResults(query) {
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const candidates = [
-    ...state.tabs.filter((tab) => isGroupableTab(tab, { includePinned: true })),
-    ...state.workspace.pages
-  ];
-  const seen = new Set();
-  const results = [];
-
-  for (const candidate of candidates) {
-    const key = normalizeUrlForDuplicate(candidate.url);
-    const haystack = `${candidate.title || ""} ${candidate.url}`.toLowerCase();
-
-    if (!key || seen.has(key) || !terms.every((term) => haystack.includes(term))) {
-      continue;
-    }
-
-    seen.add(key);
-    results.push({ title: candidate.title, url: candidate.url, detail: hostOf(candidate.url) });
-
-    if (results.length >= RESULT_LIMIT) {
-      break;
-    }
-  }
-
-  return results;
-}
-
-function renderResults() {
-  const query = elements.search.value.trim();
-  const isSearching = query.length > 0;
-
-  elements.clearSearch.hidden = !isSearching;
-  elements.results.hidden = !isSearching;
-  elements.board.hidden = isSearching;
-
-  if (!isSearching) {
-    state.results = [];
-    return;
-  }
-
-  state.results = findResults(query);
-  state.selectedResult = Math.min(state.selectedResult, Math.max(0, state.results.length - 1));
-
-  elements.results.innerHTML =
-    state.results
-      .map((result, index) => linkHtml({ ...result, selected: index === state.selectedResult }))
-      .join("") || '<div class="empty">No matching tab or page. Press Enter to search the web.</div>';
-}
-
 function renderAll() {
   renderBrief();
   renderLocalServers();
@@ -589,54 +383,6 @@ async function focusTab(tabId, windowId) {
     console.error(error);
     await loadTabs();
     renderAll();
-  }
-}
-
-function openResult(result) {
-  const openTab = state.openByUrl.get(normalizeUrlForDuplicate(result.url));
-
-  if (openTab) {
-    focusTab(openTab.id, openTab.windowId);
-    return;
-  }
-
-  window.location.href = result.url;
-}
-
-function submitSearch() {
-  const query = elements.search.value.trim();
-  const result = state.results[state.selectedResult];
-
-  if (result) {
-    openResult(result);
-    return;
-  }
-
-  if (!query) {
-    return;
-  }
-
-  if (/^[^\s]+\.[^\s]+$/.test(query) || /^localhost(:\d+)?(\/|$)/.test(query)) {
-    const scheme = query.startsWith("localhost") ? "http://" : "https://";
-    window.location.href = /^[a-z]+:\/\//i.test(query) ? query : scheme + query;
-    return;
-  }
-
-  chrome.search.query({ disposition: "CURRENT_TAB", text: query });
-}
-
-// The build runs in the background worker and reports through storage, so it
-// survives this tab closing and shows up in every other new tab.
-async function buildBrief() {
-  state.build = { status: "running", phase: "history" };
-  renderBrief();
-
-  try {
-    await chrome.runtime.sendMessage({ type: "tabbit.buildBrief" });
-  } catch (error) {
-    state.build = { status: "failed", error: "Background worker did not respond", finishedAt: Date.now() };
-    renderBrief();
-    console.error(error);
   }
 }
 
@@ -695,192 +441,6 @@ function scheduleTabRefresh() {
     renderAll();
     probeLocalServers();
   }, 400);
-}
-
-let shortcutDraft = [];
-let savingShortcuts = false;
-
-function captureShortcutDraft() {
-  shortcutDraft = [...elements.shortcutRows.querySelectorAll(".shortcut-row")].map((row) => ({
-    label: row.querySelector("[data-shortcut-label]").value,
-    url: row.querySelector("[data-shortcut-url]").value
-  }));
-}
-
-function renderShortcutEditor(focusIndex) {
-  elements.shortcutRows.innerHTML = shortcutDraft.map((item, index) => `
-    <div class="shortcut-row">
-      <span class="shortcut-index" aria-hidden="true">${index + 1}</span>
-      <label>Name<input data-shortcut-label maxlength="32" value="${escapeHtml(item.label)}" aria-label="Shortcut ${index + 1} name" /></label>
-      <label>URL<input data-shortcut-url value="${escapeHtml(item.url)}" placeholder="https://example.com" aria-label="Shortcut ${index + 1} URL" spellcheck="false" /></label>
-      <div class="shortcut-actions">
-        <button class="icon-button" type="button" data-shortcut-action="up" data-index="${index}" aria-label="Move shortcut ${index + 1} up" ${index === 0 ? "disabled" : ""}>↑</button>
-        <button class="icon-button" type="button" data-shortcut-action="down" data-index="${index}" aria-label="Move shortcut ${index + 1} down" ${index === shortcutDraft.length - 1 ? "disabled" : ""}>↓</button>
-        <button class="icon-button" type="button" data-shortcut-action="remove" data-index="${index}" aria-label="Remove shortcut ${index + 1}">×</button>
-      </div>
-    </div>`).join("");
-  const full = shortcutDraft.length >= MAX_SHORTCUTS;
-  document.querySelector("#addShortcut").disabled = full;
-  elements.shortcutSuggestion.disabled = full;
-  document.querySelector("#shortcutCount").textContent = `${shortcutDraft.length} of ${MAX_SHORTCUTS} shortcuts`;
-  if (focusIndex !== undefined) {
-    elements.shortcutRows.querySelectorAll("[data-shortcut-label]")[focusIndex]?.focus();
-  }
-}
-
-function openShortcutEditor() {
-  shortcutDraft = state.shortcuts.map((item) => ({ ...item }));
-  elements.shortcutError.textContent = "";
-  const hosts = new Set(shortcutDraft.map((item) => hostOf(item.url)));
-  const sites = state.workspace.categories.flatMap((category) => category.sites)
-    .filter((site) => site.host !== "drive.google.com" && !hosts.has(site.host))
-    .sort((a, b) => b.visits - a.visits);
-  elements.shortcutSuggestion.innerHTML = '<option value="">Choose a site…</option>' + sites.map((site) =>
-    `<option value="${escapeHtml(site.pages[0].url)}">${escapeHtml(site.host)}</option>`).join("");
-  renderShortcutEditor();
-  elements.shortcutDialog.showModal();
-}
-
-function closeShortcutEditor() {
-  if (!savingShortcuts) elements.shortcutDialog.close();
-}
-
-async function saveShortcutEditor(event) {
-  event.preventDefault();
-  if (savingShortcuts) return;
-  captureShortcutDraft();
-  elements.shortcutError.textContent = "";
-  let shortcuts;
-  try {
-    shortcuts = validateShortcuts(shortcutDraft);
-  } catch (error) {
-    elements.shortcutError.textContent = error.message;
-    return;
-  }
-  savingShortcuts = true;
-  const form = document.querySelector("#shortcutForm");
-  form.inert = true;
-  try {
-    await chrome.storage.local.set({ [SHORTCUTS_KEY]: shortcuts });
-    state.shortcuts = shortcuts;
-    renderQuickLinks();
-    elements.shortcutDialog.close();
-  } catch (_error) {
-    elements.shortcutError.textContent = "Could not save shortcuts. Your changes are still here; try again.";
-  } finally {
-    savingShortcuts = false;
-    form.inert = false;
-  }
-}
-
-let savingSettings = false;
-
-function renderSettingsProvider() {
-  const codex = elements.settingsProvider.value === "codex";
-  elements.settingsApiKey.closest("label").hidden = codex;
-  elements.settingsCodexNote.hidden = !codex;
-}
-
-function openSettings() {
-  const settings = normalizeAiSettings(state.aiSettings || {});
-  elements.settingsProvider.value = settings.provider;
-  // The saved key is never shown; leaving the field blank keeps it.
-  elements.settingsApiKey.value = "";
-  elements.settingsApiKey.placeholder = settings.apiKey ? "Saved locally" : "sk-...";
-  elements.settingsModel.value = settings.model;
-  elements.settingsBriefModel.value = settings.briefModel;
-  elements.settingsContext.value = settings.context;
-  elements.settingsError.textContent = "";
-  renderSettingsProvider();
-  elements.settingsDialog.showModal();
-}
-
-function closeSettings() {
-  if (!savingSettings) elements.settingsDialog.close();
-}
-
-async function saveSettings(event) {
-  event.preventDefault();
-  if (savingSettings) return;
-  elements.settingsError.textContent = "";
-  const settings = normalizeAiSettings({
-    provider: elements.settingsProvider.value,
-    apiKey: elements.settingsApiKey.value.trim() || state.aiSettings?.apiKey || "",
-    model: elements.settingsModel.value,
-    briefModel: elements.settingsBriefModel.value,
-    context: elements.settingsContext.value.trim().slice(0, 600),
-    modelRoutingVersion: MODEL_ROUTING_VERSION
-  });
-  savingSettings = true;
-  const form = document.querySelector("#settingsForm");
-  form.inert = true;
-  try {
-    await chrome.storage.local.set({ [AI_SETTINGS_KEY]: settings });
-    state.aiSettings = settings;
-    renderBrief();
-    elements.settingsDialog.close();
-  } catch (_error) {
-    elements.settingsError.textContent = "Could not save settings. Your changes are still here; try again.";
-  } finally {
-    savingSettings = false;
-    form.inert = false;
-  }
-}
-
-function bindSettings() {
-  document.querySelector("#openSettings").addEventListener("click", openSettings);
-  document.querySelector("#closeSettings").addEventListener("click", closeSettings);
-  document.querySelector("#cancelSettings").addEventListener("click", closeSettings);
-  document.querySelector("#settingsForm").addEventListener("submit", saveSettings);
-  elements.settingsProvider.addEventListener("change", renderSettingsProvider);
-  elements.settingsDialog.addEventListener("cancel", (event) => {
-    if (savingSettings) event.preventDefault();
-  });
-}
-
-function bindShortcutEditor() {
-  document.querySelector("#editShortcuts").addEventListener("click", openShortcutEditor);
-  document.querySelector("#closeShortcuts").addEventListener("click", closeShortcutEditor);
-  document.querySelector("#cancelShortcuts").addEventListener("click", closeShortcutEditor);
-  document.querySelector("#shortcutForm").addEventListener("submit", saveShortcutEditor);
-  elements.shortcutDialog.addEventListener("cancel", (event) => {
-    if (savingShortcuts) event.preventDefault();
-  });
-  document.querySelector("#addShortcut").addEventListener("click", () => {
-    captureShortcutDraft();
-    if (shortcutDraft.length >= MAX_SHORTCUTS) return;
-    shortcutDraft.push({ label: "", url: "https://" });
-    renderShortcutEditor(shortcutDraft.length - 1);
-  });
-  elements.shortcutSuggestion.addEventListener("change", () => {
-    const option = elements.shortcutSuggestion.selectedOptions[0];
-    if (!option.value) return;
-    captureShortcutDraft();
-    if (shortcutDraft.length < MAX_SHORTCUTS) {
-      shortcutDraft.push({ label: option.textContent.slice(0, 32), url: option.value });
-      renderShortcutEditor(shortcutDraft.length - 1);
-    }
-    elements.shortcutSuggestion.value = "";
-  });
-  elements.shortcutRows.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-shortcut-action]");
-    if (!button) return;
-    captureShortcutDraft();
-    const index = Number(button.dataset.index);
-    const action = button.dataset.shortcutAction;
-    let focusIndex = index;
-    if (action === "remove") {
-      shortcutDraft.splice(index, 1);
-      focusIndex = Math.max(0, Math.min(index, shortcutDraft.length - 1));
-    } else {
-      const next = index + (action === "up" ? -1 : 1);
-      if (next < 0 || next >= shortcutDraft.length) return;
-      [shortcutDraft[index], shortcutDraft[next]] = [shortcutDraft[next], shortcutDraft[index]];
-      focusIndex = next;
-    }
-    renderShortcutEditor(focusIndex);
-    if (!shortcutDraft.length) document.querySelector("#addShortcut").focus();
-  });
 }
 
 function bindEvents() {
@@ -992,7 +552,7 @@ async function init() {
   probeLocalServers();
 
   // Lets the worker pick up an interrupted build or refresh a stale brief.
-  chrome.runtime.sendMessage({ type: "tabbit.wake" }).catch(() => {});
+  chrome.runtime.sendMessage({ type: messages.wake }).catch(() => {});
 }
 
 init();

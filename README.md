@@ -130,23 +130,31 @@ npm run check     # syntax-check JS files
 npm run validate  # parse manifest.json + check + test
 ```
 
-The codebase is plain Manifest V3 — no bundler, no transpilation, no dependencies. Files of interest:
+The codebase is plain Manifest V3 — no bundler, no transpilation, and no runtime dependencies. TypeScript is a development-only checker for the extracted JavaScript modules; install it with `npm ci`. `npm run validate` checks every shipped script, runs `tsc` with `checkJs`, and runs the Node regression suite. Chrome/native API boundaries remain loosely typed; this is incremental checking, not full-project strict typing. Files of interest:
 
 | File | Role |
 | --- | --- |
 | `src/popup.html` | Popup markup. |
 | `src/popup.css` | Dark minimal styling. |
-| `src/popup.js` | Popup controller: state, settings persistence, OpenAI API call, Chrome API calls. |
+| `src/popup.js` | Popup state, tab actions, grouping previews and sessions; settings UI lives in `popup-settings-view.js`. AI calls run in the worker. |
 | `src/organizer.js` | Pure functions: grouping plans, localhost extraction, duplicate detection, URL normalization. Importable in Node for tests. |
 | `src/newtab.html`, `src/newtab.css` | New-tab markup and styling. |
-| `src/newtab.js` | New-tab controller: reads tabs and history, renders the dashboard and the stored brief, probes local servers. |
-| `src/background.js` | Service worker: builds the brief (page picking, reading, OpenAI calls), stores progress, resumes and schedules builds. |
+| `src/newtab.js` | New-tab composition, shared state, tab/history snapshots, directory rendering and event routing. |
+| `src/background.js` | Composition root: wires adapters/workflows and routes Chrome messages, startup events and alarms. |
+| `src/contracts.js`, `types/contracts.d.ts` | Stable storage/message names and JSDoc data contracts; existing persisted values are unchanged. |
+| `src/storage.js`, `src/build-lifecycle.js` | Settings migration/storage access and shared single-flight build state with persisted timing. |
+| `src/ai-transport.js` | OpenAI streaming/grouping and native Codex transport; injected platform and network adapters. |
+| `src/page-reader.js`, `src/community-reader.js` | Browser extraction/window cleanup and bounded HN request concurrency. |
+| `src/brief-workflow.js`, `src/feed-workflow.js`, `src/grouping-workflow.js` | Feature prompts, orchestration, result validation, scheduling/recovery policies. |
+| `src/newtab-*-view.js`, `src/popup-settings-view.js` | Feature controllers for settings, shortcuts, brief, local servers and search. Dependencies are supplied at creation. |
 | `src/workspace.js` | Pure functions: history ranking, site categories, local server detection, page-reading rules, brief validation. Importable in Node for tests. |
 | `src/discovery.js` | Pure discovery source selection, browsing profile, evidence validation and feedback helpers. |
 | `src/discovery-view.js` | Compact discovery feed, filters, feedback and instructions UI. |
 | `native-host/codex-host.js` | Native messaging host that runs requests through the local `codex` CLI. |
 | `scripts/install-codex-host.js` | Registers that host with Chrome. |
 | `tests/*.test.js` | Node `node:test` suites covering the organizer and workspace modules. |
+
+Modules expose factories through browser namespaces and CommonJS for tests. The worker owns build lifetimes; views only send messages and observe storage. Workflows depend on injected readers/transport/storage, while pure ranking and validation modules remain platform-independent. Worker integration tests run the entrypoint in a VM with Chrome adapters; focused module tests import factories directly. Tests no longer slice function bodies out of source files. Browser preview checks use fixtures and do not establish live extension/native-host behavior.
 
 ## Permissions
 

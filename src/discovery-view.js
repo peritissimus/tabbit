@@ -1,5 +1,6 @@
 (async function initDiscoveryView() {
-  const FEED = "tabbit.feed", BUILD = "tabbit.feedBuild", PREFS = "tabbit.feedPreferences", FEEDBACK = "tabbit.feedFeedback";
+  const {keys, messages} = window.TabbitContracts;
+  const FEED = keys.feed, BUILD = keys.feedBuild, PREFS = keys.feedPreferences, FEEDBACK = keys.feedFeedback;
   const $ = id => document.getElementById(id);
   const escape = value => String(value || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
   const normalize = window.TabbitOrganizer.normalizeUrlForDuplicate;
@@ -50,7 +51,7 @@
     $("feedRefresh").disabled=true;
     $("feedStatus").textContent="Starting…";
     try {
-      const result=await chrome.runtime.sendMessage({type:"tabbit.buildFeed"});
+      const result=await chrome.runtime.sendMessage({type:messages.buildFeed});
       if (result?.error) throw new Error(result.error);
       if (result?.ok !== true) throw new Error("The background worker didn't start the feed. Reload Tabbit in chrome://extensions and try again.");
       await load();
@@ -67,7 +68,7 @@
     const buttons=[...b.closest('.feed-votes').querySelectorAll('button')];
     buttons.forEach(button=>button.disabled=true);
     try {
-      const result=await chrome.runtime.sendMessage({type:"tabbit.feedFeedback",url:b.dataset.feedUrl,vote:Number(b.dataset.feedVote)});
+      const result=await chrome.runtime.sendMessage({type:messages.feedFeedback,url:b.dataset.feedUrl,vote:Number(b.dataset.feedVote)});
       if (result?.error) throw new Error(result.error);
       const saved=await chrome.storage.local.get(FEEDBACK); state.feedback=saved[FEEDBACK] || {};
       voteButtons(); $("feedMessage").textContent="Feedback saved. It guides your next refresh; click again to undo.";
@@ -86,7 +87,7 @@
   $("feedForm").addEventListener("submit",async event=>{
     event.preventDefault(); $("feedSave").disabled=true;
     try {
-      const result=await chrome.runtime.sendMessage({type:"tabbit.feedPreferences",instructions:$("feedInstructions").value,autoRefresh:$("feedAutoRefresh").checked});
+      const result=await chrome.runtime.sendMessage({type:messages.feedPreferences,instructions:$("feedInstructions").value,autoRefresh:$("feedAutoRefresh").checked});
       if (result?.error) throw new Error(result.error);
       const saved=await chrome.storage.local.get(PREFS); state.prefs=saved[PREFS] || {};
       $("feedDialog").close(); $("feedMessage").textContent="Instructions saved. Refresh to apply them.";
