@@ -188,3 +188,9 @@ Modules expose factories through browser namespaces and CommonJS for tests. The 
 ## License
 
 MIT. See `LICENSE` if present, otherwise treat as MIT.
+
+### New-tab controls
+
+Model settings are dropdowns in both the popup and new tab, with choices for the selected provider. Previously saved custom model names remain selectable. “Brief & feed model” controls both writing tasks.
+
+The **Organize tabs** pill below search groups the current window, leaving pinned tabs and other windows alone. With AI configured it uses the selected grouping model and your context; otherwise it groups locally. It never closes tabs. The job runs in the background, saves its status per window, ignores repeated clicks while running, and rechecks tab IDs before applying groups. Reopening the new tab shows the saved status. Failures are visible and retryable; an interrupted status becomes retryable after six minutes. Settings, feed actions, editor actions and filters use rounded pill controls with keyboard focus and reduced-motion support.

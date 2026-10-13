@@ -4,6 +4,8 @@ importScripts(
   "build-timing.js",
   "ai-config.js",
   "organizer.js",
+  "grouping-prompt.js",
+  "organization-workflow.js",
   "workspace.js",
   "discovery.js",
   "storage.js",
@@ -46,6 +48,7 @@ const feed = self.createTabbitFeedWorkflow({
   discovery: self.TabbitDiscovery,
 });
 const grouping = self.createTabbitGroupingWorkflow(dependencies);
+const organization = self.createTabbitOrganizationWorkflow({...dependencies, grouping, organizer:self.TabbitOrganizer, prompt:self.TabbitGroupingPrompt});
 const TICK_ALARM = "tabbit.tick",
   TICK_MINUTES = 30;
 
@@ -60,6 +63,13 @@ async function tick() {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === messages.organizeTabs) {
+    const windowId = _sender.tab?.windowId;
+    if (!Number.isInteger(windowId)) { sendResponse({error:"Open a new tab in the window you want to organize."}); return; }
+    organization.run(windowId).catch(console.error);
+    sendResponse({ok:true});
+    return;
+  }
   if (message?.type === messages.buildFeed) {
     feed.start();
     sendResponse({ ok: true });

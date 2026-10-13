@@ -526,6 +526,7 @@ function bindEvents() {
 async function init() {
   renderHeader();
   bindEvents();
+  window.createTabbitOrganizationView({chrome, document, keys, messages}).bind();
 
   const [aiSettings, sessions, buildState, savedShortcuts] = await Promise.all([
     getStoredAiSettings(),

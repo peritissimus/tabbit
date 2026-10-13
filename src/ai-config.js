@@ -100,7 +100,20 @@
     });
   }
 
+  function populateModelSelect(select, provider, selected) {
+    const models = provider === "claude" ? ["sonnet", "opus"] : [DEFAULT_AI_MODEL, DEFAULT_BRIEF_MODEL];
+    if (selected && !models.includes(selected)) models.push(selected);
+    select.replaceChildren(...models.map(model => {
+      const option = select.ownerDocument.createElement("option");
+      option.value = model;
+      option.textContent = model === "sonnet" ? "Sonnet · faster" : model === "opus" ? "Opus · deeper reasoning" : model;
+      return option;
+    }));
+    select.value = selected;
+  }
+
   return {
+    populateModelSelect,
     CLAUDE_HOST,
     modelsForProvider,
     withProviderModels,

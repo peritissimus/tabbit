@@ -32,7 +32,6 @@ p, .card-note, .brief-takeaway { text-wrap: pretty; }
 [hidden] { display: none !important; }
 .page { width: min(100%, 1200px); margin: auto; padding: clamp(28px, 5vh, 64px) 40px 40px; }
 .top { display: grid; gap: 24px; text-align: center; position: relative; }
-.settings-button { position: absolute; top: 0; right: 0; }
 .eyebrow { font-size: 11px; letter-spacing: .13em; text-transform: uppercase; color: var(--text-muted); }
 h1 { margin-top: 8px; font-size: clamp(28px, 3vw, 34px); line-height: 1.2; font-weight: 550; letter-spacing: -.04em; }
 .date-line { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
@@ -272,3 +271,17 @@ dialog::backdrop { background: rgba(0,0,0,.72); }
 .build-timing { color: var(--text-muted); font-size: 11px; margin-top: 8px; }
 .build-timing summary { cursor: pointer; min-height: 40px; padding: 12px 0; font-variant-numeric: tabular-nums; }
 .build-timing pre { white-space: pre-wrap; font: inherit; font-variant-numeric: tabular-nums; line-height: 1.8; padding-bottom: 12px; }
+
+/* Familiar, tactile controls without competing with the everyday links. */
+.top { gap: 16px; }
+.top-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.ghost-button, .primary-button, .session-action, .icon-button, .clear-search,
+.feed-filters button { border-radius: 999px; }
+.ghost-button { background: var(--bg-soft); padding-inline: 16px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.055), 0 2px 4px rgba(0,0,0,.08); }
+.top-actions .ghost-button { min-width: 104px; }
+.organization-status { font-size: 12px; color: var(--text-muted); text-wrap: pretty; }
+.organization-status:empty { display: none; }
+.organization-status.is-error { color: #ffb4a9; }
+#organizeTabs[aria-busy="true"]::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: organize-spin 900ms linear infinite; }
+@keyframes organize-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #organizeTabs[aria-busy="true"]::before { animation: none; } }

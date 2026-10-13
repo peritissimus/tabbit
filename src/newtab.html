@@ -9,7 +9,6 @@
   <body>
     <main class="page">
       <header class="top">
-        <button id="openSettings" class="ghost-button settings-button" type="button">Settings</button>
         <div class="top-copy">
           <h1 id="greeting"></h1>
           <p id="dateLine" class="date-line"></p>
@@ -30,6 +29,11 @@
           <kbd class="search-shortcut" aria-hidden="true">/</kbd>
         </div>
 
+        <div class="top-actions">
+          <button id="organizeTabs" class="ghost-button" type="button" title="Group tabs in this window; pinned tabs stay put">Organize tabs</button>
+          <button id="openSettings" class="ghost-button" type="button">Settings</button>
+        </div>
+        <p id="organizationStatus" class="organization-status" role="status" aria-live="polite"></p>
       </header>
 
       <section id="results" class="results" aria-live="polite" hidden></section>
@@ -133,11 +137,11 @@
           <p id="settingsCodexNote" class="feed-help settings-wide" hidden>Uses the Codex CLI signed in on this computer, so no key is needed. Run <code>npm run install-codex-host</code> in the Tabbit folder once, then reload the extension.</p>
           <label class="settings-field">
             <span>Grouping &amp; page selection model</span>
-            <input id="settingsModel" type="text" autocomplete="off" spellcheck="false" />
+            <select id="settingsModel"></select>
           </label>
           <label class="settings-field">
-            <span>Brief model</span>
-            <input id="settingsBriefModel" type="text" autocomplete="off" spellcheck="false" />
+            <span>Brief &amp; feed model</span>
+            <select id="settingsBriefModel"></select>
           </label>
           <label class="settings-field settings-wide">
             <span>Context</span>
@@ -184,6 +188,7 @@
     <script src="./newtab-brief-view.js"></script>
     <script src="./newtab-servers-view.js"></script>
     <script src="./newtab-search-view.js"></script>
+    <script src="./newtab-organization-view.js"></script>
     <script src="./newtab.js"></script>
     <script src="./discovery-view.js"></script>
   </body>

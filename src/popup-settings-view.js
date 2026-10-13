@@ -71,9 +71,16 @@
     }
 
     function renderAiSettings(settings) {
-      elements.aiModel.value = config.modelsForProvider(settings).model;
-      elements.aiBriefModel.value =
-        config.modelsForProvider(settings).briefModel;
+      config.populateModelSelect(
+        elements.aiModel,
+        settings.provider,
+        config.modelsForProvider(settings).model,
+      );
+      config.populateModelSelect(
+        elements.aiBriefModel,
+        settings.provider,
+        config.modelsForProvider(settings).briefModel,
+      );
       elements.aiContext.value = settings.context || "";
       elements.aiProvider.value = settings.provider;
       elements.aiApiKey.closest(".field").hidden =

@@ -20,8 +20,16 @@
       captureModels();
       draft.provider = elements.settingsProvider.value;
       const pair = config.modelsForProvider(draft);
-      elements.settingsModel.value = pair.model;
-      elements.settingsBriefModel.value = pair.briefModel;
+      config.populateModelSelect(
+        elements.settingsModel,
+        draft.provider,
+        pair.model,
+      );
+      config.populateModelSelect(
+        elements.settingsBriefModel,
+        draft.provider,
+        pair.briefModel,
+      );
       renderSettingsProvider();
     }
 
@@ -42,9 +50,16 @@
       elements.settingsApiKey.placeholder = settings.apiKey
         ? "Saved locally"
         : "sk-...";
-      elements.settingsModel.value = config.modelsForProvider(settings).model;
-      elements.settingsBriefModel.value =
-        config.modelsForProvider(settings).briefModel;
+      config.populateModelSelect(
+        elements.settingsModel,
+        settings.provider,
+        config.modelsForProvider(settings).model,
+      );
+      config.populateModelSelect(
+        elements.settingsBriefModel,
+        settings.provider,
+        config.modelsForProvider(settings).briefModel,
+      );
       elements.settingsContext.value = settings.context;
       elements.settingsError.textContent = "";
       renderSettingsProvider();

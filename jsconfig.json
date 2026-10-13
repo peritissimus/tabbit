@@ -25,6 +25,7 @@
     "src/feed-workflow.js",
     "src/grouping-workflow.js",
     "src/newtab-*-view.js",
-    "src/popup-settings-view.js"
+    "src/popup-settings-view.js",
+    "src/organization-workflow.js"
   ]
 }
