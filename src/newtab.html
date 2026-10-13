@@ -9,6 +9,7 @@
   <body>
     <main class="page">
       <header class="top">
+        <button id="openSettings" class="ghost-button settings-button" type="button">Settings</button>
         <div class="top-copy">
           <h1 id="greeting"></h1>
           <p id="dateLine" class="date-line"></p>
@@ -102,9 +103,50 @@
         <label class="feed-label" for="feedInstructions">What should we look for?</label>
         <textarea id="feedInstructions" rows="5" maxlength="1200" placeholder="Prioritize AI agents, voice AI, developer tools and personal software. Prefer concrete releases and useful new products. Skip funding-only stories."></textarea>
         <label class="feed-auto"><input id="feedAutoRefresh" type="checkbox" /> Refresh every six hours while Chrome is running</label>
-        <p class="feed-help">Builds use your existing OpenAI key. A summary of recent browsing on supported developer and news sites, your feedback, and text from selected sources are sent to OpenAI. Some sources open briefly in a minimized window. The previous edition stays available while refreshing.</p>
+        <p class="feed-help">Builds use your OpenAI key or Codex subscription, whichever is chosen in Settings. A summary of recent browsing on supported developer and news sites, your feedback, and text from selected sources are sent to OpenAI. Some sources open briefly in a minimized window. The previous edition stays available while refreshing.</p>
         <p id="feedSettingsError" class="editor-error" role="alert"></p>
         <footer class="editor-footer"><span id="feedFeedbackCount" class="subtle-count"></span><button id="feedCancel" class="ghost-button" type="button">Cancel</button><button id="feedSave" class="primary-button" type="submit">Save instructions</button></footer>
+      </form>
+    </dialog>
+
+    <dialog id="settingsDialog" aria-labelledby="settingsDialogTitle">
+      <form id="settingsForm">
+        <header class="editor-header">
+          <div><h2 id="settingsDialogTitle">Settings</h2><p>How Tabbit reaches AI for tab grouping, the brief and the discovery feed. Shared with the popup.</p></div>
+          <button id="closeSettings" class="icon-button" type="button" aria-label="Close settings">×</button>
+        </header>
+        <div class="settings-fields">
+          <label class="settings-field settings-wide">
+            <span>AI access</span>
+            <select id="settingsProvider">
+              <option value="openai">OpenAI API key</option>
+              <option value="codex">Codex subscription (local CLI)</option>
+            </select>
+          </label>
+          <label class="settings-field settings-wide">
+            <span>OpenAI API key</span>
+            <input id="settingsApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+          </label>
+          <p id="settingsCodexNote" class="feed-help settings-wide" hidden>Uses the Codex CLI signed in on this computer, so no key is needed. Run <code>npm run install-codex-host</code> in the Tabbit folder once, then reload the extension.</p>
+          <label class="settings-field">
+            <span>Grouping &amp; page selection model</span>
+            <input id="settingsModel" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="settings-field">
+            <span>Brief model</span>
+            <input id="settingsBriefModel" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="settings-field settings-wide">
+            <span>Context</span>
+            <textarea id="settingsContext" rows="3" maxlength="600" autocomplete="off" placeholder="e.g. dev at Zoca; AWS infra, localhost, *.mononest.dev internal tools, Slack/Linear, ChatGPT/Claude"></textarea>
+          </label>
+        </div>
+        <p id="settingsError" class="editor-error" role="alert"></p>
+        <footer class="editor-footer">
+          <span class="subtle-count">Stored only in this browser.</span>
+          <button id="cancelSettings" class="ghost-button" type="button">Cancel</button>
+          <button id="saveSettings" class="primary-button" type="submit">Save settings</button>
+        </footer>
       </form>
     </dialog>
 

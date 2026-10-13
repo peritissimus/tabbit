@@ -17,7 +17,8 @@ const BRIEF_KEY = "tabbit.brief";
 const BUILD_KEY = "tabbit.build";
 const PLAN_KEY = "tabbit.plan";
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const { DEFAULT_AI_MODEL, DEFAULT_BRIEF_MODEL, MODEL_ROUTING_VERSION, normalizeAiSettings, buildJsonRequest } = self.TabbitAiConfig;
+const { CODEX_HOST, DEFAULT_AI_MODEL, DEFAULT_BRIEF_MODEL, MODEL_ROUTING_VERSION, normalizeAiSettings, buildJsonRequest, buildCodexRequest, hasAiAccess } = self.TabbitAiConfig;
+const CODEX_TIMEOUT_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BRIEF_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const HISTORY_MAX_RESULTS = 5000;
@@ -322,9 +323,69 @@ function buildBriefMessages(items, pages, settings, now) {
   ];
 }
 
+// Asks the local Codex CLI through the native messaging host, which uses the
+// ChatGPT sign-in instead of an API key. The open port keeps the worker alive.
+function requestCodexJson(messages, settings, task, timeoutMs = null) {
+  return new Promise((resolve, reject) => {
+    const port = chrome.runtime.connectNative(CODEX_HOST);
+    let settled = false;
+
+    const finish = (settle, value) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timer);
+
+      try {
+        port.disconnect();
+      } catch (_error) {
+        // Already closed.
+      }
+
+      settle(value);
+    };
+
+    const timer = setTimeout(() => finish(reject, new Error("Codex took too long to answer")), timeoutMs || CODEX_TIMEOUT_MS);
+
+    port.onMessage.addListener((reply) => {
+      if (!reply?.ok) {
+        finish(reject, new Error(reply?.error || "Codex request failed"));
+        return;
+      }
+
+      try {
+        finish(resolve, parseAiJsonContent(reply.content));
+      } catch (error) {
+        finish(reject, error);
+      }
+    });
+
+    port.onDisconnect.addListener(() => {
+      const message = chrome.runtime.lastError?.message || "";
+      finish(reject, new Error(/not found|forbidden/i.test(message)
+        ? "Codex bridge is not installed. Run `npm run install-codex-host` in the Tabbit folder, then reload the extension."
+        : message || "Codex bridge closed before answering"));
+    });
+
+    try {
+      port.postMessage(buildCodexRequest(messages, settings, task));
+    } catch (error) {
+      // A port can close between connection and sending. Release its timer
+      // and connection just as we do for asynchronous disconnects.
+      finish(reject, error);
+    }
+  });
+}
+
 // Streamed so the response starts arriving at once: a service worker is
 // stopped if a fetch stays silent for 30 seconds.
 async function requestJson(messages, settings, task = "selection", timeoutMs = null) {
+  if (settings.provider === "codex") {
+    return requestCodexJson(messages, settings, task, timeoutMs);
+  }
+
   const response = await fetch(OPENAI_API_URL, {
     ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     method: "POST",
@@ -377,8 +438,8 @@ async function requestJson(messages, settings, task = "selection", timeoutMs = n
 async function runBuild(attempt) {
   const settings = await getStoredAiSettings();
 
-  if (!settings.apiKey) {
-    await setBuild({ status: "failed", phase: null, error: "Add your OpenAI key first", finishedAt: Date.now() });
+  if (!hasAiAccess(settings)) {
+    await setBuild({ status: "failed", phase: null, error: "Choose AI access in Settings first", finishedAt: Date.now() });
     return;
   }
 
@@ -480,31 +541,35 @@ async function runPlan({ requestBody, tabIds, windowId }) {
   const settings = await getStoredAiSettings();
   requestBody = buildJsonRequest(requestBody.messages, settings, "grouping");
   const plan = { status: "running", startedAt: Date.now(), tabIds, windowId };
-  const debug = { timestamp: new Date().toISOString(), request: requestBody };
+  const debug = { timestamp: new Date().toISOString(), provider: settings.provider, request: requestBody };
   await chrome.storage.local.set({ [PLAN_KEY]: plan });
 
   const keepalive = setInterval(() => chrome.runtime.getPlatformInfo(), KEEPALIVE_MS);
   let result;
 
   try {
-    const response = await fetch(OPENAI_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${settings.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(requestBody)
-    });
+    if (settings.provider === "codex") {
+      debug.parsed = await requestCodexJson(requestBody.messages, settings, "grouping");
+    } else {
+      const response = await fetch(OPENAI_API_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${settings.apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(requestBody)
+      });
 
-    debug.response = await response.json().catch(() => ({}));
-    debug.status = response.status;
+      debug.response = await response.json().catch(() => ({}));
+      debug.status = response.status;
 
-    if (!response.ok || debug.response.error) {
-      throw new Error(debug.response.error?.message || `OpenAI request failed with HTTP ${response.status}`);
+      if (!response.ok || debug.response.error) {
+        throw new Error(debug.response.error?.message || `OpenAI request failed with HTTP ${response.status}`);
+      }
+
+      debug.rawContent = debug.response.choices?.[0]?.message?.content;
+      debug.parsed = parseAiJsonContent(debug.rawContent);
     }
-
-    debug.rawContent = debug.response.choices?.[0]?.message?.content;
-    debug.parsed = parseAiJsonContent(debug.rawContent);
 
     if (!Array.isArray(debug.parsed.groups)) {
       throw new Error("AI JSON did not include a groups array");
@@ -658,7 +723,7 @@ async function runFeed(attempt = 1) {
   await chrome.alarms.create(FEED_WATCHDOG,{periodInMinutes:1});
   try {
     const settings = await getStoredAiSettings();
-    if (!settings.apiKey) throw new Error("Add your OpenAI key in the Tabbit popup first");
+    if (!hasAiAccess(settings)) throw new Error("Choose AI access in Settings first");
     const [history, tabs, preferences, feedback] = await Promise.all([
       chrome.history.search({text:"",maxResults:HISTORY_MAX_RESULTS,startTime:Date.now()-14*DAY_MS}),
       chrome.tabs.query({}), getStored(FEED_PREFS_KEY), getStored(FEED_FEEDBACK_KEY)

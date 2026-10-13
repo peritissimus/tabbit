@@ -63,7 +63,8 @@ The build runs in the extension's background service worker, not in the new-tab 
 
 | Field | Default | Purpose |
 | --- | --- | --- |
-| OpenAI API key | — | Required. Stored in `chrome.storage.local`. |
+| AI access | OpenAI API key | `OpenAI API key` calls the API directly. `Codex subscription` goes through the local Codex CLI instead (see below). |
+| OpenAI API key | — | Required for API-key access. Stored in `chrome.storage.local`. |
 | Grouping & page selection | `gpt-6-luna` | Groups tabs and picks pages for the brief, with low reasoning effort. |
 | Brief model | `gpt-6.1-sol` | Synthesizes the scraped pages into the brief, with medium reasoning effort. |
 | Context | — | Free-form text appended to the AI's system prompt to steer group naming. Wildcard domains in it (`*.acme.dev`) also define the new tab's Internal bucket. |
@@ -71,6 +72,18 @@ The build runs in the extension's background service worker, not in the new-tab 
 Defaults baked into the code (no UI controls): current window only, min group size 2, pinned tabs ignored, groups created uncollapsed.
 
 Legacy single-model settings automatically adopt Luna and Sol while preserving your API key and context. You can then change either model independently. Cached briefs and grouping plans remain until their normal refresh or an explicit rebuild.
+
+## Using a Codex subscription instead of an API key
+
+A ChatGPT/Codex subscription has no API key, so Tabbit reaches it through the `codex` CLI on your computer:
+
+1. Install the Codex CLI and sign in with `codex login`.
+2. Run `npm run install-codex-host` in this folder. It registers a native messaging host (`dev.tabbit.codex`) for Chrome, Chrome Canary and Chromium, pinned to this folder's extension id and your current `node` and `codex` paths. Re-run it if either path changes; pass `--id <extension id>` if the extension is not loaded unpacked from this folder, and `--uninstall` to remove it.
+3. Reload Tabbit in `chrome://extensions` and set **AI access** to **Codex subscription** in the popup or the new tab's **Settings** dialog.
+
+Each request then runs `codex exec` in an empty temporary directory with the read-only sandbox, no session history and your Codex config and rules ignored, using the same two model fields. Expect roughly ten seconds and a few thousand tokens of overhead per call, counted against your Codex usage limits. Page text is passed to Codex as data with an instruction not to act on it, but Codex is an agent with shell access inside that sandbox, so this is a wider surface than a plain API call.
+
+`npm run validate` includes simulated native-port tests for brief and feed builds: repeated new-tab wake events preserve the active request, completed editions stay cached, and failed sends release the connection. These tests use fixture browser reads and Codex replies, not a live browser or subscription. For the live check, start each build with Codex selected, close and reopen the new tab during generation, and verify it finishes without restarting and stays unchanged on another reopen.
 
 ## How AI grouping works
 
@@ -127,6 +140,8 @@ The codebase is plain Manifest V3 — no bundler, no transpilation, no dependenc
 | `src/workspace.js` | Pure functions: history ranking, site categories, local server detection, page-reading rules, brief validation. Importable in Node for tests. |
 | `src/discovery.js` | Pure discovery source selection, browsing profile, evidence validation and feedback helpers. |
 | `src/discovery-view.js` | Compact discovery feed, filters, feedback and instructions UI. |
+| `native-host/codex-host.js` | Native messaging host that runs requests through the local `codex` CLI. |
+| `scripts/install-codex-host.js` | Registers that host with Chrome. |
 | `tests/*.test.js` | Node `node:test` suites covering the organizer and workspace modules. |
 
 ## Permissions
@@ -141,6 +156,7 @@ The codebase is plain Manifest V3 — no bundler, no transpilation, no dependenc
 | `search` | Send new-tab searches to your default search engine. |
 | `scripting` | Read the text of the pages chosen for the brief. |
 | `alarms` | Refresh a stale brief and restart an interrupted build. |
+| `nativeMessaging` | Talk to the local Codex CLI when AI access is set to Codex subscription. |
 | host: `<all_urls>` | Read pages for the brief, call OpenAI, and check which local dev servers are up. |
 
 ## License

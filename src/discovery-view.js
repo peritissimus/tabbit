@@ -21,7 +21,7 @@
     $("feedStatus").textContent=status;
     $("feedRefresh").disabled=running();
     $("feedRefresh").textContent=state.feed ? "Refresh" : "Build feed";
-    $("feedMessage").textContent=state.build?.status==="failed" ? state.build.error : !state.feed ? "Build once to discover news and products from your browsing. Uses your OpenAI key; Tune feed explains what is sent." : "";
+    $("feedMessage").textContent=state.build?.status==="failed" ? state.build.error : !state.feed ? "Build once to discover news and products from your browsing. Uses the AI access chosen in Settings; Tune feed explains what is sent." : "";
     const items=Array.isArray(state.feed?.items) ? state.feed.items : [];
     $("feedFilters").hidden=!items.length;
     document.querySelectorAll("[data-feed-filter]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.feedFilter===state.filter)));

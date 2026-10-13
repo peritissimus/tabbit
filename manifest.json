@@ -4,7 +4,7 @@
   "description": "Organize Chrome tabs, close duplicates and unused tabs, save tab sessions, and open new tabs on a work dashboard.",
   "version": "0.1.0",
   "minimum_chrome_version": "121",
-  "permissions": ["tabs", "tabGroups", "storage", "history", "favicon", "search", "scripting", "alarms"],
+  "permissions": ["tabs", "tabGroups", "storage", "history", "favicon", "search", "scripting", "alarms", "nativeMessaging"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "src/background.js"
