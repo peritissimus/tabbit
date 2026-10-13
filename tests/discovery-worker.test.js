@@ -6,10 +6,11 @@ const vm = require('node:vm');
 function harness() {
   const storage={'tabbit.aiSettings':{apiKey:'dummy',modelRoutingVersion:1}};
   const requests=[], updates=[];
+  let onMessage;
   const listener={addListener(){}};
   const context=vm.createContext({URL,AbortSignal,TextDecoderStream,setTimeout,clearTimeout,setInterval,clearInterval,console,
     chrome:{storage:{local:{get:async key=>({[key]:storage[key]}),set:async values=>{Object.assign(storage,values);updates.push(structuredClone(values));}}},
-      runtime:{onMessage:listener,onStartup:listener,onInstalled:listener,getPlatformInfo(){}},
+      runtime:{onMessage:{addListener(fn){onMessage=fn;}},onStartup:listener,onInstalled:listener,getPlatformInfo(){}},
       alarms:{onAlarm:listener,create:async()=>{},clear:async()=>{}},
       tabs:{query:async()=>[]},history:{search:async()=>[{url:'https://react.dev/',title:'React UI',visitCount:10,lastVisitTime:Date.now()}]},
       windows:{remove:async()=>{}}},
@@ -30,7 +31,7 @@ function harness() {
   context.importScripts=(...files)=>files.forEach(file=>vm.runInContext(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'),context));
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/background.js'),'utf8'),context);
   vm.runInContext('reader.readPages = async targets => targets.map(item=>({item,ok:false,error:"Source unavailable"}))',context);
-  return {storage,requests,updates,context,run:code=>vm.runInContext(code,context)};
+  return {storage,requests,updates,context,message:(...args)=>onMessage(...args),run:code=>vm.runInContext(code,context)};
 }
 test('worker persists a single feed build, uses real community evidence and reports unavailable sources',async()=>{
   const h=harness();
@@ -151,4 +152,22 @@ test('structured publisher evidence reaches curation and RSS success skips its b
   assert.ok(launch.evidenceContext.includes('Build complex software'));
   assert.equal(launch.publishedAt,'2026-10-13T16:00:00.000Z');
   assert.equal(h.storage['tabbit.feed'].sources.find(s=>s.title==='Google AI Announcements').ok,true);
+});
+
+
+test('loaded background acknowledges the exact new-tab organization message and groups its window',async()=>{
+  const h=harness();
+  h.storage['tabbit.aiSettings']={};
+  const calls=[];
+  h.context.chrome.tabs.query=async({windowId})=>[1,2].map(id=>({id,windowId,url:`https://github.com/org/repo${id}`,title:'Repo'}));
+  h.context.chrome.tabs.group=async request=>{calls.push(request);return 10;};
+  h.context.chrome.tabGroups={update:async()=>{}};
+  let reply;
+  h.message({type:'tabbit.organizeTabs'},{tab:{windowId:4}},value=>{reply=value;});
+  assert.equal(reply.ok,true);
+  await h.run('organization.run(4)');
+  assert.equal(h.storage['tabbit.organization.4'].status,'done');
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].createProperties.windowId,4);
+  assert.deepEqual(Array.from(calls[0].tabIds),[1,2]);
 });

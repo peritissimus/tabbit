@@ -8,6 +8,7 @@
     const button = document.querySelector("#organizeTabs");
     const status = document.querySelector("#organizationStatus");
     let key, latest, timer;
+    const reconnectMessage = "Tabbit’s background worker did not respond. Open chrome://extensions, reload Tabbit, then open a fresh new tab and try again.";
     function render(value) {
       latest = value;
       const stale =
@@ -37,9 +38,10 @@
         });
         render((await chrome.storage.local.get(key))[key]);
         button.addEventListener("click", async () => {
+          const requestStartedAt = Date.now();
           render({
             status: "running",
-            startedAt: Date.now(),
+            startedAt: requestStartedAt,
             message: "Finding a home for your tabs…",
           });
           try {
@@ -47,9 +49,17 @@
               type: messages.organizeTabs,
             });
             if (!reply?.ok)
-              throw new Error(reply?.error || "Could not start organization");
+              throw new Error(reply?.error || reconnectMessage);
           } catch (error) {
-            render({ status: "failed", message: error.message });
+            // A lost reply does not prove the job failed: the worker may already
+            // have persisted progress or even finished before the port closed.
+            const saved = (await chrome.storage.local.get(key).catch(() => ({})))[key];
+            if (saved?.startedAt >= requestStartedAt) {
+              render(saved);
+              return;
+            }
+            const disconnected = /receiving end does not exist|message port closed|extension context invalidated|could not establish connection/i.test(error.message);
+            render({ status: "failed", message: disconnected ? reconnectMessage : error.message });
           }
         });
       } catch (error) {
