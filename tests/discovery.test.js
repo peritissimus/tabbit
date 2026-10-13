@@ -119,3 +119,13 @@ test('Meta watchlist uses the current research site and retains Muse Wonder as a
   assert.equal(feed.length, 1);
   assert.equal(feed[0].url, 'https://research.meta.ai/blog/muse-wonder');
 });
+
+test('fresh significant releases outrank older higher-impact stories without promoting trivial news', () => {
+  const {rankFeed} = require('../src/discovery');
+  const now = Date.parse('2026-10-13T12:00:00Z');
+  const item = (id, score, days) => ({id, impact:{score}, publishedAt:days===null?null:new Date(now-days*86400000).toISOString()});
+  const items=[item('older-major',36,5),item('fresh-major',30,1),item('fresh-minor',5,0),item('undated',30,null)];
+  assert.deepEqual(rankFeed(items,now).map(i=>i.id), ['fresh-major','older-major','undated','fresh-minor']);
+  assert.equal(rankFeed([item('just-before',30,1.99),item('just-after',31,2.01)],now)[0].id,'just-after','no abrupt 48-hour ranking cliff');
+  assert.equal(rankFeed([item('unknown',30,null),item('dated',30,1)],now)[0].id,'dated');
+});

@@ -107,8 +107,16 @@
     const breadth = Math.min(level("breadth"), supported ? 3 : 1);
     return { capability, relevance, actionability, breadth, confidence: supported ? "reported" : "uncertain", why: clip(input.why,160), quote: supported ? quote : "", score: capability * 5 + relevance * 4 + actionability * 3 + breadth };
   }
-  function rankFeed(items) {
-    return [...items].sort((a,b) => (b.impact?.score || 0) - (a.impact?.score || 0) || (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0) || Math.min(b.score || 0,1000) - Math.min(a.score || 0,1000));
+  function rankFeed(items, now = Date.now()) {
+    const priority = item => {
+      const published = Date.parse(item.publishedAt);
+      // Preserve full impact for two days, then decay smoothly. Unknown dates
+      // must not receive the same freshness credit as verified recent dates.
+      const ageDays = Math.max(0, (now - published) / 86400000);
+      const freshness = Number.isFinite(published) ? 1 / (1 + Math.max(0, ageDays - 2) / 3) : 0.6;
+      return (item.impact?.score || 0) * freshness;
+    };
+    return [...items].sort((a,b) => priority(b) - priority(a) || (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0) || Math.min(b.score || 0,1000) - Math.min(a.score || 0,1000));
   }
   function buildFeed(payload, evidence, feedback = {}, now = Date.now()) {
     const byId = new Map(evidence.map(item => [item.id, item])), seen = new Set(), selected = [];
@@ -125,7 +133,7 @@
       const { evidenceContext, ...publicItem } = item;
       selected.push({ ...publicItem, impact, title: clip(entry.title,100), kind: entry.kind, summary: clip(entry.summary,180), reason: clip(entry.reason,120), topics: [...new Set((Array.isArray(entry.topics) ? entry.topics : []).map(t=>clip(t,32)).filter(Boolean))].slice(0,3) });
     }
-    return rankFeed(selected).slice(0,16);
+    return rankFeed(selected, now).slice(0,16);
   }
   function feedbackExamples(feedback) {
     return Object.values(feedback || {}).filter(r => r && (r.vote === 1 || r.vote === -1)).sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,40)
