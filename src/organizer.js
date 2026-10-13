@@ -272,7 +272,7 @@
   }
 
   function buildGroupingPlan(tabs, options = {}) {
-    const minGroupSize = Math.max(2, Number(options.minGroupSize || 2));
+    const minGroupSize = Math.max(options.includeSingletons ? 1 : 2, Number(options.minGroupSize || 2));
     const { localhostTabs, remainingTabs } = partitionLocalhostTabs(tabs, options);
     const localhostGroups = buildLocalhostGroups(localhostTabs);
 

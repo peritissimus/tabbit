@@ -69,7 +69,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === messages.organizeTabs) {
     const windowId = _sender.tab?.windowId;
     if (!Number.isInteger(windowId)) { sendResponse({error:"Open a new tab in the window you want to organize."}); return; }
-    organization.run(windowId).catch(console.error);
+    organization.run(windowId, _sender.tab.id).catch(console.error);
     sendResponse({ok:true});
     return;
   }
