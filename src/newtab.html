@@ -63,6 +63,7 @@
             </div>
           </div>
           <div id="brief" aria-live="polite"></div>
+          <details id="briefTiming" class="build-timing" hidden><summary>Build timing</summary><pre></pre></details>
         </section>
 
         <section class="discovery-section" aria-labelledby="discoveryHeading">
@@ -75,6 +76,7 @@
             <button type="button" data-feed-filter="all" aria-pressed="true">All</button><button type="button" data-feed-filter="labs" aria-pressed="false">AI labs</button><button type="button" data-feed-filter="news" aria-pressed="false">News</button><button type="button" data-feed-filter="product" aria-pressed="false">Products</button>
           </div>
           <div id="feedItems" class="feed-grid"></div>
+          <details id="feedTiming" class="build-timing" hidden><summary>Build timing</summary><pre></pre></details>
           <div class="feed-footer"><button id="feedMore" class="ghost-button" type="button" hidden>More picks</button><details id="feedSources" hidden><summary>Sources</summary><div id="feedSourceList"></div></details></div>
         </section>
 
@@ -170,6 +172,7 @@
         </footer>
       </form>
     </dialog>
+    <script src="./build-timing.js"></script>
     <script src="./newtab-settings.js"></script>
     <script src="./ai-config.js"></script>
     <script src="./organizer.js"></script>

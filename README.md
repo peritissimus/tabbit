@@ -110,6 +110,8 @@ The writing model curates up to sixteen evidence-backed news/product items. Item
 
 Independent page reads run concurrently: publisher pages load alongside HN requests, already-open brief pages are read together, and each HN source keeps at most five story requests active. Models, content limits, and source coverage are unchanged. Brief/feed processing shows a spinner and first-build placeholders, respects reduced-motion preferences, and keeps saved content visible during refresh.
 
+After each build, expand **Built in …** beneath the brief or feed to see wall-clock timings for selection, source reading, and writing/curation, plus the longest stage. Brief timings also include browser history. Measurements persist across tab closes, report failed attempts too, and cover the latest attempt only. Older cached builds have no timings until rebuilt.
+
 Thumbs up/down are saved locally, toggle off when clicked again, and feed the next source-selection and curation prompts. A downvoted URL is excluded from future editions; one vote does not ban an entire source. **Tune feed** saves instructions and an automatic-refresh toggle. After the first successful edition, refresh runs every six hours while Chrome is running. Failed attempts back off, an interrupted build restarts once, and closing a new tab never discards an edition or starts a fresh build by itself.
 
 ## Privacy

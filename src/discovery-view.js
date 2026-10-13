@@ -17,6 +17,7 @@
     }
   }
   function render() {
+    window.TabbitBuildTiming.render($("feedTiming"), state.build);
     const status=running() ? ({choosing:"Choosing sources…",reading:"Reading sources…",curating:"Picking the best…"}[state.build.phase] || "Building…") : age(state.feed?.createdAt);
     $("feedStatus").textContent=status;
     $("feedStatus").classList.toggle("is-processing", running());

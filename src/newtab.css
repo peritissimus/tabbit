@@ -268,3 +268,7 @@ dialog::backdrop { background: rgba(0,0,0,.72); }
   .is-processing::before, .loading-lines span { animation: none; }
   .loading-lines span { opacity: .55; }
 }
+
+.build-timing { color: var(--text-muted); font-size: 11px; margin-top: 8px; }
+.build-timing summary { cursor: pointer; min-height: 40px; padding: 12px 0; font-variant-numeric: tabular-nums; }
+.build-timing pre { white-space: pre-wrap; font: inherit; font-variant-numeric: tabular-nums; line-height: 1.8; padding-bottom: 12px; }

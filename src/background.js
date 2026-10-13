@@ -1,4 +1,4 @@
-importScripts("ai-config.js", "organizer.js", "workspace.js", "discovery.js");
+importScripts("build-timing.js", "ai-config.js", "organizer.js", "workspace.js", "discovery.js");
 
 const { normalizeUrlForDuplicate } = self.TabbitOrganizer;
 
@@ -85,7 +85,7 @@ async function getStoredAiSettings() {
 }
 
 async function setBuild(patch) {
-  build = { ...build, ...patch };
+  build = self.TabbitBuildTiming.update(build, patch);
   await chrome.storage.local.set({ [BUILD_KEY]: build });
 }
 
@@ -685,7 +685,7 @@ let feedBuild = null;
 let feedRunning = null;
 let feedPreferenceWrite = Promise.resolve();
 async function setFeedBuild(patch) {
-  feedBuild = { ...feedBuild, ...patch };
+  feedBuild = self.TabbitBuildTiming.update(feedBuild, patch);
   await chrome.storage.local.set({ [FEED_BUILD_KEY]: feedBuild });
 }
 async function fetchHnSource(source) {

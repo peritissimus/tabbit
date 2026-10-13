@@ -315,6 +315,7 @@ function renderBrief() {
   elements.briefButton.hidden = !hasKey;
   elements.briefButton.disabled = isRunning;
   elements.briefButton.textContent = brief ? "Rebuild" : "Build";
+  window.TabbitBuildTiming.render(document.getElementById("briefTiming"), state.build);
   elements.briefStatus.textContent = buildStatusText();
   elements.briefStatus.classList.toggle("is-processing", isRunning);
   elements.brief.setAttribute("aria-busy", String(isRunning));
