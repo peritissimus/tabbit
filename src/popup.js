@@ -11,7 +11,7 @@ const AI_SETTINGS_KEY = "tabbit.aiSettings";
 const UI_STATE_KEY = "tabbit.uiState";
 const PLAN_KEY = "tabbit.plan";
 const PLAN_PENDING_MAX_MS = 2 * 60 * 1000;
-const { DEFAULT_AI_MODEL, DEFAULT_BRIEF_MODEL, MODEL_ROUTING_VERSION, normalizeAiSettings, buildJsonRequest } = window.TabbitAiConfig;
+const { DEFAULT_AI_MODEL, DEFAULT_BRIEF_MODEL, MODEL_ROUTING_VERSION, normalizeAiSettings, buildJsonRequest, hasAiAccess } = window.TabbitAiConfig;
 const TAB_GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
 
 const DEFAULT_OPTIONS = {
@@ -23,6 +23,8 @@ const DEFAULT_OPTIONS = {
 
 const elements = {
   aiApiKey: document.querySelector("#aiApiKey"),
+  aiProvider: document.querySelector("#aiProvider"),
+  aiCodexNote: document.querySelector("#aiCodexNote"),
   aiBody: document.querySelector("#aiBody"),
   aiContext: document.querySelector("#aiContext"),
   aiModel: document.querySelector("#aiModel"),
@@ -170,6 +172,7 @@ function readAiSettingsFromForm() {
   const typedContext = elements.aiContext.value;
 
   return {
+    provider: elements.aiProvider.value === "codex" ? "codex" : "openai",
     apiKey: typedApiKey || storedApiKey,
     model: typedModel || DEFAULT_AI_MODEL,
     briefModel: elements.aiBriefModel.value.trim() || DEFAULT_BRIEF_MODEL,
@@ -179,13 +182,13 @@ function readAiSettingsFromForm() {
 }
 
 async function saveAiSettings() {
-  const previousHadKey = Boolean(state.aiSettings?.apiKey);
+  const previousHadKey = hasAiAccess(state.aiSettings);
   const nextSettings = readAiSettingsFromForm();
   state.aiSettings = nextSettings;
   await chrome.storage.local.set({ [AI_SETTINGS_KEY]: nextSettings });
   renderAiSettings(nextSettings);
 
-  const hasKey = Boolean(nextSettings.apiKey);
+  const hasKey = hasAiAccess(nextSettings);
   setKeyState(hasKey);
 
   if (hasKey && !previousHadKey) {
@@ -198,6 +201,9 @@ function renderAiSettings(settings) {
   elements.aiModel.value = settings.model || DEFAULT_AI_MODEL;
   elements.aiBriefModel.value = settings.briefModel || DEFAULT_BRIEF_MODEL;
   elements.aiContext.value = settings.context || "";
+  elements.aiProvider.value = settings.provider;
+  elements.aiApiKey.closest(".field").hidden = settings.provider === "codex";
+  elements.aiCodexNote.hidden = settings.provider !== "codex";
   elements.aiApiKey.value = "";
   elements.aiApiKey.placeholder = settings.apiKey ? "Saved locally" : "sk-...";
   renderAiSummary();
@@ -463,7 +469,7 @@ async function refreshLocal() {
 async function _buildAiPlanInner() {
   const settings = readAiSettingsFromForm();
 
-  if (!settings.apiKey) {
+  if (!hasAiAccess(settings)) {
     setStatus("Need key", "warn");
     return false;
   }
@@ -522,7 +528,7 @@ async function refresh() {
 }
 
 async function replan() {
-  if (state.aiSettings?.apiKey) {
+  if (hasAiAccess(state.aiSettings)) {
     await buildAiPlan();
   } else {
     await refreshLocal();
@@ -779,6 +785,7 @@ function buildDebugSnapshot() {
     settings: {
       model: state.aiSettings?.model || null,
       briefModel: state.aiSettings?.briefModel || null,
+      provider: state.aiSettings?.provider || null,
       hasApiKey: Boolean(state.aiSettings?.apiKey),
       contextLength: (state.aiSettings?.context || "").length,
       context: state.aiSettings?.context || ""
@@ -849,6 +856,7 @@ function bindEvents() {
   elements.saveSessionButton.addEventListener("click", saveSession);
   elements.debugExportButton.addEventListener("click", exportDebugSnapshot);
 
+  elements.aiProvider.addEventListener("change", saveAiSettings);
   elements.aiApiKey.addEventListener("change", saveAiSettings);
   elements.aiModel.addEventListener("change", saveAiSettings);
   elements.aiBriefModel.addEventListener("change", saveAiSettings);
@@ -883,7 +891,7 @@ function bindEvents() {
 async function init() {
   bindEvents();
   await loadAiSettings();
-  const hasKey = Boolean(state.aiSettings?.apiKey);
+  const hasKey = hasAiAccess(state.aiSettings);
   setKeyState(hasKey);
 
   const uiState = await getStoredUiState();

@@ -47,10 +47,18 @@
 
         <div id="aiBody" class="ai-body">
           <div class="welcome-note">
-            <p>Tabbit uses OpenAI to group your tabs into clusters. Add your API key to start.</p>
+            <p>Tabbit uses OpenAI to group your tabs into clusters. Add your API key, or switch to your Codex subscription, to start.</p>
             <a class="welcome-link" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">Get an API key →</a>
           </div>
           <div class="ai-fields">
+            <label class="field api-key-field">
+              <span>AI access</span>
+              <select id="aiProvider">
+                <option value="openai">OpenAI API key</option>
+                <option value="codex">Codex subscription (local CLI)</option>
+              </select>
+            </label>
+            <p id="aiCodexNote" class="codex-note" hidden>Uses the Codex CLI signed in on this computer. Run <code>npm run install-codex-host</code> in the Tabbit folder once.</p>
             <label class="field api-key-field">
               <span>OpenAI API key</span>
               <input id="aiApiKey" type="password" autocomplete="off" placeholder="sk-..." />

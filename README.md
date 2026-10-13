@@ -63,7 +63,8 @@ The build runs in the extension's background service worker, not in the new-tab 
 
 | Field | Default | Purpose |
 | --- | --- | --- |
-| OpenAI API key | — | Required. Stored in `chrome.storage.local`. |
+| AI access | OpenAI API key | `OpenAI API key` calls the API directly. `Codex subscription` goes through the local Codex CLI instead (see below). |
+| OpenAI API key | — | Required for API-key access. Stored in `chrome.storage.local`. |
 | Grouping & page selection | `gpt-6-luna` | Groups tabs and picks pages for the brief, with low reasoning effort. |
 | Brief model | `gpt-6.1-sol` | Synthesizes the scraped pages into the brief, with medium reasoning effort. |
 | Context | — | Free-form text appended to the AI's system prompt to steer group naming. Wildcard domains in it (`*.acme.dev`) also define the new tab's Internal bucket. |
@@ -71,6 +72,18 @@ The build runs in the extension's background service worker, not in the new-tab 
 Defaults baked into the code (no UI controls): current window only, min group size 2, pinned tabs ignored, groups created uncollapsed.
 
 Legacy single-model settings automatically adopt Luna and Sol while preserving your API key and context. You can then change either model independently. Cached briefs and grouping plans remain until their normal refresh or an explicit rebuild.
+
+## Using a Codex subscription instead of an API key
+
+A ChatGPT/Codex subscription has no API key, so Tabbit reaches it through the `codex` CLI on your computer:
+
+1. Install the Codex CLI and sign in with `codex login`.
+2. Run `npm run install-codex-host` in this folder. It registers a native messaging host (`dev.tabbit.codex`) for Chrome, Chrome Canary and Chromium, pinned to this folder's extension id and your current `node` and `codex` paths. Re-run it if either path changes; pass `--id <extension id>` if the extension is not loaded unpacked from this folder, and `--uninstall` to remove it.
+3. Reload Tabbit in `chrome://extensions` and set **AI access** to **Codex subscription** in the popup or the new tab's **Settings** dialog.
+
+Each request then runs `codex exec` in an empty temporary directory with the read-only sandbox, no session history and your Codex config and rules ignored, using the same two model fields. Expect roughly ten seconds and a few thousand tokens of overhead per call, counted against your Codex usage limits. Page text is passed to Codex as data with an instruction not to act on it, but Codex is an agent with shell access inside that sandbox, so this is a wider surface than a plain API call.
+
+`npm run validate` includes simulated native-port tests for brief and feed builds: repeated new-tab wake events preserve the active request, completed editions stay cached, and failed sends release the connection. These tests use fixture browser reads and Codex replies, not a live browser or subscription. For the live check, start each build with Codex selected, close and reopen the new tab during generation, and verify it finishes without restarting and stays unchanged on another reopen.
 
 ## How AI grouping works
 
@@ -87,12 +100,23 @@ The request runs in the background worker and the plan is stored, so reopening t
 
 If the AI call fails or returns invalid JSON, Tabbit falls back to a built-in heuristic that groups by domain (GitHub → Code, MDN → Docs, slack/gmail/linear → Work, etc.). The localhost override applies in both paths.
 
+## Personalized discovery feed
+
+**Worth discovering** keeps the existing work layout and shows four picks at a time: official AI-lab announcements, news and products, with more behind **More picks**. **AI labs**, **News** and **Products** filter the saved edition. **Build feed** starts the first edition; **Refresh** explicitly rebuilds it.
+
+The worker summarizes the last 14 days of browsing on supported developer/news domains (domain, up to four titles, visits), then the selection model chooses from curated news and publisher surfaces. HN and Show HN use the public API for current links, submission timestamps, points and comments. Other selected sites (including Product Hunt, Techmeme and official announcement blogs) are read in the signed-in browser, up to fourteen sources total, including official channels for all six AI labs (OpenAI, Anthropic, Google DeepMind, Meta AI, xAI and Mistral). Google coverage also always includes Google Developers Blog and Google AI Announcements, where Gemma and developer-facing releases may appear. Unreadable or redirected sources are listed in **Sources**. Product Hunt uses its browser page; it does not use the licensed Product Hunt API.
+
+The writing model curates up to sixteen evidence-backed news/product items. Items are then ranked by practical impact: capability change, relevance to your work, actionability and broader consequences. Freshness and engagement only break ties. Fixed lab/news/product quotas no longer override the four visible picks. High-impact labels require a supporting quote from the individual item context; unsupported/title-only estimates are discounted. “Why it matters” explains the consequence. These remain editorial estimates, not measured or independently verified impact. URLs must come from links actually retrieved. HN dates are submission dates, not verified first-launch dates; undated browser links show **Date not provided**. Structured items older than seven days (news) or fourteen days (products) are rejected. Model editorial judgments about relevance, novelty and summaries still need user judgment.
+
+Thumbs up/down are saved locally, toggle off when clicked again, and feed the next source-selection and curation prompts. A downvoted URL is excluded from future editions; one vote does not ban an entire source. **Tune feed** saves instructions and an automatic-refresh toggle. After the first successful edition, refresh runs every six hours while Chrome is running. Failed attempts back off, an interrupted build restarts once, and closing a new tab never discards an edition or starts a fresh build by itself.
+
 ## Privacy
 
 - **Sent to OpenAI on each Organize**: tab IDs, tab titles, hostname + path (no query strings, no fragments), window ID, and your context line.
 - **Sent to OpenAI on each Brief build**: titles and hostname + path of up to 60 pages (open tabs first, then your top pages from the last 14 days of history), visit counts, your context line, and the visible text and links of the up to 8 pages it reads. Those pages are read signed in as you, so they can include private content. Nothing is sent until you click **Build** for the first time.
-- **Never sent**: page content outside a Brief build, your API key (it goes in the Authorization header to OpenAI only), session snapshots.
-- **Stored locally**: API key, model, context string, saved sessions, the latest brief. All in `chrome.storage.local`.
+- **Sent to OpenAI on each Discovery build**: the supported-domain browsing summary, feed instructions, up to 40 rated examples, and text/links from the selected news/product sources. The API key is used only for OpenAI authentication. Internal wildcard domains, local addresses, unsupported sites and authentication hops are excluded from the discovery profile.
+- **Never sent**: page content outside a Brief or Discovery build, your API key (it goes in the Authorization header to OpenAI only), session snapshots.
+- **Stored locally**: API key, model, context string, saved sessions, the latest brief, discovery edition/progress, feed instructions and up to 200 feedback records. All in `chrome.storage.local`.
 
 ## Development
 
@@ -114,6 +138,10 @@ The codebase is plain Manifest V3 — no bundler, no transpilation, no dependenc
 | `src/newtab.js` | New-tab controller: reads tabs and history, renders the dashboard and the stored brief, probes local servers. |
 | `src/background.js` | Service worker: builds the brief (page picking, reading, OpenAI calls), stores progress, resumes and schedules builds. |
 | `src/workspace.js` | Pure functions: history ranking, site categories, local server detection, page-reading rules, brief validation. Importable in Node for tests. |
+| `src/discovery.js` | Pure discovery source selection, browsing profile, evidence validation and feedback helpers. |
+| `src/discovery-view.js` | Compact discovery feed, filters, feedback and instructions UI. |
+| `native-host/codex-host.js` | Native messaging host that runs requests through the local `codex` CLI. |
+| `scripts/install-codex-host.js` | Registers that host with Chrome. |
 | `tests/*.test.js` | Node `node:test` suites covering the organizer and workspace modules. |
 
 ## Permissions
@@ -128,6 +156,7 @@ The codebase is plain Manifest V3 — no bundler, no transpilation, no dependenc
 | `search` | Send new-tab searches to your default search engine. |
 | `scripting` | Read the text of the pages chosen for the brief. |
 | `alarms` | Refresh a stale brief and restart an interrupted build. |
+| `nativeMessaging` | Talk to the local Codex CLI when AI access is set to Codex subscription. |
 | host: `<all_urls>` | Read pages for the brief, call OpenAI, and check which local dev servers are up. |
 
 ## License

@@ -34,3 +34,21 @@ test("preserves later per-task overrides without adding GPT-6 parameters to othe
   assert.equal(buildJsonRequest([], settings).reasoning_effort, undefined);
   assert.equal(buildJsonRequest([], settings, "brief").model, "gpt-6.1-sol");
 });
+
+test("treats a Codex subscription as AI access without a key", () => {
+  const { hasAiAccess, buildCodexRequest } = require("../src/ai-config");
+  assert.equal(normalizeAiSettings({ provider: "something" }).provider, "openai");
+  assert.equal(hasAiAccess(normalizeAiSettings()), false);
+  assert.equal(hasAiAccess(normalizeAiSettings({ apiKey: "dummy-key" })), true);
+  const settings = normalizeAiSettings({ provider: "codex" });
+  assert.equal(hasAiAccess(settings), true);
+
+  const messages = [{ role: "system", content: "Return JSON" }, { role: "user", content: "{\"tabs\":[]}" }];
+  const grouping = buildCodexRequest(messages, settings, "grouping");
+  assert.equal(grouping.model, "gpt-6-luna");
+  assert.equal(grouping.effort, "low");
+  assert.match(grouping.prompt, /<system>\nReturn JSON\n<\/system>\n\n<user>\n\{"tabs":\[\]\}\n<\/user>$/);
+  const brief = buildCodexRequest(messages, settings, "brief");
+  assert.equal(brief.model, "gpt-6.1-sol");
+  assert.equal(brief.effort, "medium");
+});

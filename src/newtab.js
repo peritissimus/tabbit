@@ -16,7 +16,7 @@ const BRIEF_KEY = "tabbit.brief";
 const BUILD_KEY = "tabbit.build";
 const SNAPSHOT_KEY = "tabbit.newtabSnapshot";
 const SNAPSHOT_VERSION = 2;
-const { DEFAULT_AI_MODEL, DEFAULT_BRIEF_MODEL, MODEL_ROUTING_VERSION, normalizeAiSettings, buildJsonRequest } = window.TabbitAiConfig;
+const { DEFAULT_AI_MODEL, DEFAULT_BRIEF_MODEL, MODEL_ROUTING_VERSION, normalizeAiSettings, buildJsonRequest, hasAiAccess } = window.TabbitAiConfig;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HISTORY_MAX_RESULTS = 5000;
 const CARD_LINK_LIMIT = 6;
@@ -40,6 +40,14 @@ const elements = {
   clearSearch: document.querySelector("#clearSearch"),
   sessionCount: document.querySelector("#sessionCount"),
   sessionList: document.querySelector("#sessionList"),
+  settingsDialog: document.querySelector("#settingsDialog"),
+  settingsProvider: document.querySelector("#settingsProvider"),
+  settingsApiKey: document.querySelector("#settingsApiKey"),
+  settingsCodexNote: document.querySelector("#settingsCodexNote"),
+  settingsModel: document.querySelector("#settingsModel"),
+  settingsBriefModel: document.querySelector("#settingsBriefModel"),
+  settingsContext: document.querySelector("#settingsContext"),
+  settingsError: document.querySelector("#settingsError"),
   shortcutDialog: document.querySelector("#shortcutDialog"),
   shortcutRows: document.querySelector("#shortcutRows"),
   shortcutError: document.querySelector("#shortcutError"),
@@ -300,7 +308,7 @@ function sourcesText(sources) {
 }
 
 function renderBrief() {
-  const hasKey = Boolean(state.aiSettings?.apiKey);
+  const hasKey = hasAiAccess(state.aiSettings);
   const brief = state.brief;
   const isRunning = state.build?.status === "running";
 
@@ -318,7 +326,7 @@ function renderBrief() {
 
     elements.brief.innerHTML = hasKey
       ? '<div class="empty">Build a brief to see what needs your attention and the work threads you have in flight.</div>'
-      : '<div class="empty">Add your OpenAI key in the Tabbit popup to get an AI brief of your work threads.</div>';
+      : '<div class="empty">Open Settings to add an OpenAI key or use your Codex subscription, then build an AI brief of your work threads.</div>';
     return;
   }
 
@@ -762,6 +770,71 @@ async function saveShortcutEditor(event) {
   }
 }
 
+let savingSettings = false;
+
+function renderSettingsProvider() {
+  const codex = elements.settingsProvider.value === "codex";
+  elements.settingsApiKey.closest("label").hidden = codex;
+  elements.settingsCodexNote.hidden = !codex;
+}
+
+function openSettings() {
+  const settings = normalizeAiSettings(state.aiSettings || {});
+  elements.settingsProvider.value = settings.provider;
+  // The saved key is never shown; leaving the field blank keeps it.
+  elements.settingsApiKey.value = "";
+  elements.settingsApiKey.placeholder = settings.apiKey ? "Saved locally" : "sk-...";
+  elements.settingsModel.value = settings.model;
+  elements.settingsBriefModel.value = settings.briefModel;
+  elements.settingsContext.value = settings.context;
+  elements.settingsError.textContent = "";
+  renderSettingsProvider();
+  elements.settingsDialog.showModal();
+}
+
+function closeSettings() {
+  if (!savingSettings) elements.settingsDialog.close();
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  if (savingSettings) return;
+  elements.settingsError.textContent = "";
+  const settings = normalizeAiSettings({
+    provider: elements.settingsProvider.value,
+    apiKey: elements.settingsApiKey.value.trim() || state.aiSettings?.apiKey || "",
+    model: elements.settingsModel.value,
+    briefModel: elements.settingsBriefModel.value,
+    context: elements.settingsContext.value.trim().slice(0, 600),
+    modelRoutingVersion: MODEL_ROUTING_VERSION
+  });
+  savingSettings = true;
+  const form = document.querySelector("#settingsForm");
+  form.inert = true;
+  try {
+    await chrome.storage.local.set({ [AI_SETTINGS_KEY]: settings });
+    state.aiSettings = settings;
+    renderBrief();
+    elements.settingsDialog.close();
+  } catch (_error) {
+    elements.settingsError.textContent = "Could not save settings. Your changes are still here; try again.";
+  } finally {
+    savingSettings = false;
+    form.inert = false;
+  }
+}
+
+function bindSettings() {
+  document.querySelector("#openSettings").addEventListener("click", openSettings);
+  document.querySelector("#closeSettings").addEventListener("click", closeSettings);
+  document.querySelector("#cancelSettings").addEventListener("click", closeSettings);
+  document.querySelector("#settingsForm").addEventListener("submit", saveSettings);
+  elements.settingsProvider.addEventListener("change", renderSettingsProvider);
+  elements.settingsDialog.addEventListener("cancel", (event) => {
+    if (savingSettings) event.preventDefault();
+  });
+}
+
 function bindShortcutEditor() {
   document.querySelector("#editShortcuts").addEventListener("click", openShortcutEditor);
   document.querySelector("#closeShortcuts").addEventListener("click", closeShortcutEditor);
@@ -809,6 +882,7 @@ function bindShortcutEditor() {
 
 function bindEvents() {
   bindShortcutEditor();
+  bindSettings();
   elements.briefButton.addEventListener("click", buildBrief);
   elements.clearSearch.addEventListener("click", () => {
     elements.search.value = "";
@@ -845,7 +919,7 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "/" && !elements.shortcutDialog.open && !event.target.closest("input, textarea, select, [contenteditable]")) {
+    if (event.key === "/" && !document.querySelector("dialog[open]") && !event.target.closest("input, textarea, select, [contenteditable]")) {
       event.preventDefault();
       elements.search.focus();
     }
