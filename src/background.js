@@ -206,12 +206,13 @@ async function readPages(targets, tabs, progress = setBuild) {
 
   const pagesById = new Map();
   const toLoad = [];
+  const openReads = [];
 
   for (const item of targets) {
     const tab = openByUrl.get(normalizeUrlForDuplicate(item.url));
 
     if (tab) {
-      pagesById.set(item.id, await readTab(tab.id, item));
+      openReads.push(readTab(tab.id, item).then(page => pagesById.set(item.id, page)));
     } else {
       toLoad.push(item);
     }
@@ -248,6 +249,7 @@ async function readPages(targets, tabs, progress = setBuild) {
     }
   }
 
+  await Promise.all(openReads);
   return targets.map((item) => pagesById.get(item.id));
 }
 
@@ -695,11 +697,18 @@ async function fetchHnSource(source) {
       return result.json();
     };
     const ids = (await fetchJson(`https://hacker-news.firebaseio.com/v0/${endpoint}.json`)).slice(0, 30);
-    const stories = [];
-    for (let i = 0; i < ids.length; i += 5) {
-      const batch = await Promise.allSettled(ids.slice(i,i+5).map(id=>fetchJson(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)));
-      for (const result of batch) if (result.status === "fulfilled" && result.value?.type === "story" && !result.value.dead && !result.value.deleted && result.value.url) stories.push(result.value);
-    }
+    // Keep five requests active without making each batch wait for its slowest item.
+    // Store by index so network completion order cannot change editorial input order.
+    const results = new Array(ids.length);
+    let next = 0;
+    await Promise.all(Array.from({length: Math.min(5, ids.length)}, async () => {
+      while (next < ids.length) {
+        const index = next++;
+        try { results[index] = await fetchJson(`https://hacker-news.firebaseio.com/v0/item/${ids[index]}.json`); }
+        catch (_error) { /* One unavailable story must not block the other sources. */ }
+      }
+    }));
+    const stories = results.filter(story => story?.type === "story" && !story.dead && !story.deleted && story.url);
     const links = stories.map(s=>({title:s.title, url:s.url, publishedAt:new Date(s.time*1000).toISOString(), score:s.score || 0, comments:s.descendants || 0}));
     return { item:source, ok:links.length>0, error:links.length ? "" : "No current stories", text:JSON.stringify(links), links };
   } catch (error) { return { item:source, ok:false, error:error.message }; }
@@ -739,10 +748,12 @@ async function runFeed(attempt = 1) {
     const sources = discovery.selectSources(selected,candidates).map(s=>({...s,discovery:true}));
     await setFeedBuild({phase:"reading",sourceCount:sources.length});
     const community = sources.filter(s=>s.title==="Hacker News" || s.title==="Show HN");
-    const pages = [
-      ...await Promise.all(community.map(fetchHnSource)),
-      ...await readPages(sources.filter(s=>!community.includes(s)),tabs,setFeedBuild)
-    ];
+    // Community APIs and browser page loads are independent; start both now.
+    const [communityPages, publisherPages] = await Promise.all([
+      Promise.all(community.map(fetchHnSource)),
+      readPages(sources.filter(s=>!community.includes(s)),tabs,setFeedBuild)
+    ]);
+    const pages = [...communityPages, ...publisherPages];
     const evidence = discovery.buildEvidence(pages);
     if (!evidence.items.length) throw new Error("Couldn't read current links from any source. Try again later.");
     await setFeedBuild({phase:"curating"});

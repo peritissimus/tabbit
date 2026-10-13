@@ -80,3 +80,60 @@ test('source reads reject cross-host redirects and challenge pages before sendin
   const blocked=await h.run('readTab(1,{url:"https://www.producthunt.com/",discovery:true})');
   assert.equal(blocked.ok,false);
 });
+
+test('publisher pages start while community requests are still pending', async () => {
+  const h = harness();
+  let release;
+  h.context.communityGate = new Promise(resolve => { release = resolve; });
+  h.context.publisherStarted = false;
+  h.run('fetchHnSource = async item => { await communityGate; return {item,ok:false}; }; readPages = async targets => { publisherStarted = true; return targets.map(item=>({item,ok:true,text:"Release",links:[{title:"New release",url:"https://framework.example/"}]})); };');
+  const pending = h.run('startFeed()');
+  try {
+    for (let i=0; i<30 && !h.context.publisherStarted; i++) await new Promise(resolve=>setTimeout(resolve,1));
+    assert.equal(h.context.publisherStarted, true);
+    assert.equal(h.storage['tabbit.feedBuild'].phase, 'reading');
+  } finally { release(); await pending; }
+  assert.equal(h.storage['tabbit.feedBuild'].status, 'idle');
+});
+
+test('open brief pages read concurrently and retain their original order', async () => {
+  const h = harness();
+  // Restore production reader, which the shared feed harness normally replaces.
+  const source = fs.readFileSync(path.join(__dirname,'../src/background.js'),'utf8');
+  vm.runInContext(source.slice(source.indexOf('async function readPages('), source.indexOf('\nfunction describeItems(')), h.context);
+  let release;
+  h.context.readGate = new Promise(resolve=>{release=resolve;});
+  h.context.readIds = [];
+  h.run('readTab = async (id,item) => { readIds.push(id); await readGate; return {item,ok:true}; };');
+  const pending = h.run('readPages([{id:1,url:"https://one.example/"},{id:2,url:"https://two.example/"}],[{id:10,url:"https://one.example/",status:"complete"},{id:20,url:"https://two.example/",status:"complete"}])');
+  try { assert.deepEqual(Array.from(h.context.readIds), [10,20]); }
+  finally { release(); }
+  assert.deepEqual(Array.from(await pending,page=>page.item.id), [1,2]);
+});
+
+test('HN pool fills free slots without exceeding five requests or reordering stories', async () => {
+  const h = harness();
+  const started = [], gates = new Map();
+  let active=0, peak=0;
+  h.context.fetch = async url => {
+    if (url.includes('stories')) return Response.json([1,2,3,4,5,6]);
+    const id = Number(url.match(/item\/(\d+)/)[1]);
+    started.push(id); peak=Math.max(peak,++active);
+    await new Promise(resolve=>gates.set(id,resolve));
+    active--;
+    return Response.json({type:'story',title:`Story ${id}`,url:`https://example.com/${id}`,time:1});
+  };
+  const pending = h.run('fetchHnSource({title:"Hacker News"})');
+  const waitFor = async condition => {
+    for(let i=0;i<30&&!condition();i++) await new Promise(resolve=>setTimeout(resolve,1));
+    assert.ok(condition());
+  };
+  await waitFor(()=>started.length===5);
+  gates.get(2)();
+  await waitFor(()=>started.length===6);
+  assert.equal(active,5);
+  for(const release of gates.values()) release();
+  const result = await pending;
+  assert.equal(peak,5);
+  assert.deepEqual(Array.from(result.links,link=>link.title),[1,2,3,4,5,6].map(id=>`Story ${id}`));
+});
