@@ -136,3 +136,19 @@ test('HN pool fills free slots without exceeding five requests or reordering sto
   assert.equal(peak,5);
   assert.deepEqual(Array.from(result.links,link=>link.title),[1,2,3,4,5,6].map(id=>`Story ${id}`));
 });
+
+test('structured publisher evidence reaches curation and RSS success skips its browser read', async () => {
+  const h = harness();
+  h.context.publisherXml = fs.readFileSync(path.join(__dirname,'fixtures/google-release-rss.xml'),'utf8');
+  h.context.originalFetch = h.context.fetch;
+  h.run(`fetch = async (url, options) => url === 'https://blog.google/rss/' ? {ok:true,text:async()=>publisherXml} : originalFetch(url,options);
+    publisherReader.readSource = createTabbitPublisherReader({fetch}).readSource;
+    reader.readPages = async targets => { if (targets.some(s=>s.rss)) throw Error('RSS unnecessarily opened in browser'); return targets.map(item=>({item,ok:false})); };`);
+  await h.run('feed.start()');
+  assert.equal(h.storage['tabbit.feedBuild'].status,'idle');
+  const evidence = JSON.parse(h.requests[1].messages[1].content).items;
+  const launch = evidence.find(i=>i.title.includes('available for developers'));
+  assert.ok(launch.evidenceContext.includes('Build complex software'));
+  assert.equal(launch.publishedAt,'2026-10-13T16:00:00.000Z');
+  assert.equal(h.storage['tabbit.feed'].sources.find(s=>s.title==='Google AI Announcements').ok,true);
+});

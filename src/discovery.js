@@ -13,7 +13,7 @@
     { title: "OpenAI News", lab: "OpenAI", url: "https://openai.com/news/", topics: ["AI", "agents", "voice"] },
     { title: "Google DeepMind", lab: "Google DeepMind", url: "https://deepmind.google/discover/blog/", topics: ["AI", "models", "research"] },
     { title: "Google Developers Blog", lab: "Google AI", url: "https://developers.googleblog.com/", topics: ["AI", "Gemma", "on-device AI", "developer releases"] },
-    { title: "Google AI Announcements", lab: "Google AI", url: "https://blog.google/innovation-and-ai/", topics: ["AI", "Gemini", "Gemma", "models"] },
+    { title: "Google AI Announcements", rss: "https://blog.google/rss/", lab: "Google AI", url: "https://blog.google/innovation-and-ai/", topics: ["AI", "Gemini", "Gemma", "models"] },
     { title: "Meta AI", lab: "Meta AI", url: "https://research.meta.ai/", topics: ["AI", "models", "agents", "research"] },
     { title: "xAI News", lab: "xAI", url: "https://x.ai/news", topics: ["AI", "models", "agents"] },
     { title: "Mistral News", lab: "Mistral", url: "https://mistral.ai/news/", topics: ["AI", "open models", "voice"] },
@@ -86,7 +86,7 @@
           item.lab = lab;
           item.source = page.item.title;
           item.sourceUrl = page.item.url;
-          if (link.publishedAt) item.publishedAt = link.publishedAt;
+          item.publishedAt = link.publishedAt || null; // Never borrow a community submission date for an official release.
           item.evidenceContext = clip(link.context || link.title, 800);
         }
         links.push({ id: item.id, title: item.title, lab: item.lab, context: item.evidenceContext, publishedAt: item.publishedAt, score: item.score, comments: item.comments });
@@ -107,6 +107,13 @@
     const breadth = Math.min(level("breadth"), supported ? 3 : 1);
     return { capability, relevance, actionability, breadth, confidence: supported ? "reported" : "uncertain", why: clip(input.why,160), quote: supported ? quote : "", score: capability * 5 + relevance * 4 + actionability * 3 + breadth };
   }
+  function isModelRelease(item) {
+    const text = `${item.title}. ${item.evidenceContext || ""}`;
+    return Boolean(item.lab && item.evidenceContext &&
+      /\b(model|gemini|gemma|claude|gpt|grok|llama|mistral|embedding)\b/i.test(text) &&
+      /\b(introducing|releasing|launching|released|launched|now available|now access|giving.{0,60}access|comes to)\b/i.test(text) &&
+      !/\b(roundup|partnership|funding|rumou?r|reportedly|tutorial)\b/i.test(item.title));
+  }
   function rankFeed(items, now = Date.now()) {
     const priority = item => {
       const published = Date.parse(item.publishedAt);
@@ -114,7 +121,10 @@
       // must not receive the same freshness credit as verified recent dates.
       const ageDays = Math.max(0, (now - published) / 86400000);
       const freshness = Number.isFinite(published) ? 1 / (1 + Math.max(0, ageDays - 2) / 3) : 0.6;
-      return (item.impact?.score || 0) * freshness;
+      // Fresh official model launches get a temporary editorial priority, not an
+      // inflated impact score. Unknown, future and old dates cannot claim it.
+      const launchPriority = item.modelRelease && published <= now && ageDays <= 2 ? 50 : 0;
+      return launchPriority + (item.impact?.score || 0) * freshness;
     };
     return [...items].sort((a,b) => priority(b) - priority(a) || (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0) || Math.min(b.score || 0,1000) - Math.min(a.score || 0,1000));
   }
@@ -131,7 +141,7 @@
       seen.add(item.url);
       const impact = assessImpact(entry.impact, item);
       const { evidenceContext, ...publicItem } = item;
-      selected.push({ ...publicItem, impact, title: clip(entry.title,100), kind: entry.kind, summary: clip(entry.summary,180), reason: clip(entry.reason,120), topics: [...new Set((Array.isArray(entry.topics) ? entry.topics : []).map(t=>clip(t,32)).filter(Boolean))].slice(0,3) });
+      selected.push({ ...publicItem, modelRelease: isModelRelease(item), impact, title: clip(entry.title,100), kind: entry.kind, summary: clip(entry.summary,180), reason: clip(entry.reason,120), topics: [...new Set((Array.isArray(entry.topics) ? entry.topics : []).map(t=>clip(t,32)).filter(Boolean))].slice(0,3) });
     }
     return rankFeed(selected, now).slice(0,16);
   }

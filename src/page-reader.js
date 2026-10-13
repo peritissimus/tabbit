@@ -72,9 +72,9 @@
           node && node !== root && depth < 3;
           depth++, node = node.parentElement
         ) {
-          const time = node
-            .querySelector("time[datetime]")
-            ?.getAttribute("datetime");
+          const times = node.querySelectorAll("time[datetime]");
+          const time = times.length === 1 && node.querySelectorAll("a[href]").length <= 3
+            ? times[0].getAttribute("datetime") : null;
           if (time && Number.isFinite(Date.parse(time))) {
             publishedAt = new Date(time).toISOString();
             break;

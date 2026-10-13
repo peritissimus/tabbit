@@ -13,6 +13,7 @@ importScripts(
   "ai-transport.js",
   "page-reader.js",
   "community-reader.js",
+  "publisher-reader.js",
   "brief-workflow.js",
   "feed-workflow.js",
   "grouping-workflow.js",
@@ -26,6 +27,7 @@ const reader = self.createTabbitPageReader({
   organizer: self.TabbitOrganizer,
   discovery: self.TabbitDiscovery,
 });
+const publisherReader = self.createTabbitPublisherReader({ fetch });
 const communityReader = self.createTabbitCommunityReader({ fetch });
 const dependencies = {
   chrome,
@@ -45,6 +47,7 @@ const brief = self.createTabbitBriefWorkflow({
 const feed = self.createTabbitFeedWorkflow({
   ...dependencies,
   communityReader,
+  publisherReader,
   discovery: self.TabbitDiscovery,
 });
 const grouping = self.createTabbitGroupingWorkflow(dependencies);

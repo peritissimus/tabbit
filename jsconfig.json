@@ -21,6 +21,7 @@
     "src/ai-transport.js",
     "src/page-reader.js",
     "src/community-reader.js",
+    "src/publisher-reader.js",
     "src/brief-workflow.js",
     "src/feed-workflow.js",
     "src/grouping-workflow.js",
