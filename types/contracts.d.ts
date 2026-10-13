@@ -14,8 +14,10 @@ export interface BuildState {
   sourceCount?: number;
 }
 export interface AiSettings {
-  provider: "openai" | "codex";
+  provider: "openai" | "codex" | "claude";
   apiKey: string;
+  claudeModel?: string;
+  claudeBriefModel?: string;
   model: string;
   briefModel: string;
   context: string;

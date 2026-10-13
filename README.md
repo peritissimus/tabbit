@@ -63,7 +63,7 @@ The build runs in the extension's background service worker, not in the new-tab 
 
 | Field | Default | Purpose |
 | --- | --- | --- |
-| AI access | OpenAI API key | `OpenAI API key` calls the API directly. `Codex subscription` goes through the local Codex CLI instead (see below). |
+| AI access | OpenAI API key | `OpenAI API key` calls the API directly. `Codex subscription` and `Claude subscription` use their signed-in local CLIs (see below). |
 | OpenAI API key | — | Required for API-key access. Stored in `chrome.storage.local`. |
 | Grouping & page selection | `gpt-6-luna` | Groups tabs and picks pages for the brief, with low reasoning effort. |
 | Brief model | `gpt-6.1-sol` | Synthesizes the scraped pages into the brief, with medium reasoning effort. |
@@ -84,6 +84,20 @@ A ChatGPT/Codex subscription has no API key, so Tabbit reaches it through the `c
 Each request then runs `codex exec` in an empty temporary directory with the read-only sandbox, no session history and your Codex config and rules ignored, using the same two model fields. Expect roughly ten seconds and a few thousand tokens of overhead per call, counted against your Codex usage limits. Page text is passed to Codex as data with an instruction not to act on it, but Codex is an agent with shell access inside that sandbox, so this is a wider surface than a plain API call.
 
 `npm run validate` includes simulated native-port tests for brief and feed builds: repeated new-tab wake events preserve the active request, completed editions stay cached, and failed sends release the connection. These tests use fixture browser reads and Codex replies, not a live browser or subscription. For the live check, start each build with Codex selected, close and reopen the new tab during generation, and verify it finishes without restarting and stays unchanged on another reopen.
+
+## Using a Claude subscription
+
+1. Install a current [Claude Code CLI](https://code.claude.com/docs/en/overview) and sign in with `claude auth login`. Confirm `claude auth status` reports a Claude subscription login.
+2. Run `npm run install-claude-host` in the Tabbit folder. Optional: `-- --id <extension-id> --claude /absolute/path/to/claude`. The installer supports macOS and Linux Chrome/Chromium, like the Codex bridge; Windows is not supported.
+3. Reload Tabbit and choose **Claude subscription** in either Settings screen. No API key is needed.
+
+Grouping and page selection default to `sonnet`; brief and feed writing default to `opus`. These aliases follow the CLI's current model versions. You can override them. Claude model choices are saved separately from the shared Codex/OpenAI model choices; switching providers preserves both and your existing API key.
+
+The native host runs `claude -p` with JSON output, tools disabled, safe mode, no custom MCP servers, no session persistence, and an empty temporary directory. It retains local CLI authentication while removing inherited API-key and alternate-provider environment overrides. It does not extract tokens or call unofficial APIs. This requires a recent CLI supporting `--safe-mode`; update Claude Code if it reports an unknown option. Requests time out after five minutes; disconnecting the native port terminates the CLI. Brief/feed progress and results use the same persistent background workflow as the other providers.
+
+Anthropic currently permits `claude -p` and third-party app usage against subscription limits ([official policy](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan), checked October 13, 2026). Selected page text, titles and URLs are sent to Claude for generation. Your plan's limits and model availability still apply. To remove only this bridge, run `npm run install-claude-host -- --uninstall`.
+
+Validation includes both providers' native-port lifecycle tests, model preservation, Claude CLI errors/timeouts and a synthetic signed-in Claude request. Browser settings checks use a local fixture; they do not establish live Chrome extension behavior.
 
 ## How AI grouping works
 
@@ -143,14 +157,14 @@ The codebase is plain Manifest V3 — no bundler, no transpilation, and no runti
 | `src/background.js` | Composition root: wires adapters/workflows and routes Chrome messages, startup events and alarms. |
 | `src/contracts.js`, `types/contracts.d.ts` | Stable storage/message names and JSDoc data contracts; existing persisted values are unchanged. |
 | `src/storage.js`, `src/build-lifecycle.js` | Settings migration/storage access and shared single-flight build state with persisted timing. |
-| `src/ai-transport.js` | OpenAI streaming/grouping and native Codex transport; injected platform and network adapters. |
+| `src/ai-transport.js` | OpenAI streaming/grouping and native Codex/Claude transport; injected platform and network adapters. |
 | `src/page-reader.js`, `src/community-reader.js` | Browser extraction/window cleanup and bounded HN request concurrency. |
 | `src/brief-workflow.js`, `src/feed-workflow.js`, `src/grouping-workflow.js` | Feature prompts, orchestration, result validation, scheduling/recovery policies. |
 | `src/newtab-*-view.js`, `src/popup-settings-view.js` | Feature controllers for settings, shortcuts, brief, local servers and search. Dependencies are supplied at creation. |
 | `src/workspace.js` | Pure functions: history ranking, site categories, local server detection, page-reading rules, brief validation. Importable in Node for tests. |
 | `src/discovery.js` | Pure discovery source selection, browsing profile, evidence validation and feedback helpers. |
 | `src/discovery-view.js` | Compact discovery feed, filters, feedback and instructions UI. |
-| `native-host/codex-host.js` | Native messaging host that runs requests through the local `codex` CLI. |
+| `native-host/{codex,claude}-host.js` | CLI-specific runners; `protocol.js` shares native framing and connection lifecycle. |
 | `scripts/install-codex-host.js` | Registers that host with Chrome. |
 | `tests/*.test.js` | Node `node:test` suites covering the organizer and workspace modules. |
 
@@ -168,7 +182,7 @@ Modules expose factories through browser namespaces and CommonJS for tests. The 
 | `search` | Send new-tab searches to your default search engine. |
 | `scripting` | Read the text of the pages chosen for the brief. |
 | `alarms` | Refresh a stale brief and restart an interrupted build. |
-| `nativeMessaging` | Talk to the local Codex CLI when AI access is set to Codex subscription. |
+| `nativeMessaging` | Talk to the selected local Codex or Claude CLI for subscription access. |
 | host: `<all_urls>` | Read pages for the brief, call OpenAI, and check which local dev servers are up. |
 
 ## License

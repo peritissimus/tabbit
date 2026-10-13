@@ -190,7 +190,7 @@
               latestFeedback || {},
             ),
             createdAt: Date.now(),
-            model: settings.briefModel,
+            model: config.modelsForProvider(settings).briefModel,
             sources: pages.map((p) => ({
               title: p.item.title,
               url: p.item.url,

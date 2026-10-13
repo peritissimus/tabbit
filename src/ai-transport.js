@@ -5,14 +5,20 @@
 })(
   typeof self !== "undefined" ? self : this,
   function ({ chrome, fetch, config }) {
-    const { CODEX_HOST, buildJsonRequest, buildCodexRequest } = config;
+    const { CODEX_HOST, CLAUDE_HOST, buildJsonRequest, buildNativeRequest } =
+      config;
     const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
     const CODEX_TIMEOUT_MS = 5 * 60 * 1000;
-    // Asks the local Codex CLI through the native messaging host, which uses the
-    // ChatGPT sign-in instead of an API key. The open port keeps the worker alive.
-    function requestCodexJson(messages, settings, task, timeoutMs = null) {
+    // Subscription requests use a signed-in local CLI. The open native port
+    // keeps the worker alive while the CLI is generating.
+    function requestNativeJson(messages, settings, task, timeoutMs = null) {
       return new Promise((resolve, reject) => {
-        const port = chrome.runtime.connectNative(CODEX_HOST);
+        const claude = settings.provider === "claude";
+        const label = claude ? "Claude" : "Codex";
+        const install = claude ? "install-claude-host" : "install-codex-host";
+        const port = chrome.runtime.connectNative(
+          claude ? CLAUDE_HOST : CODEX_HOST,
+        );
         let settled = false;
 
         const finish = (settle, value) => {
@@ -33,13 +39,16 @@
         };
 
         const timer = setTimeout(
-          () => finish(reject, new Error("Codex took too long to answer")),
+          () => finish(reject, new Error(`${label} took too long to answer`)),
           timeoutMs || CODEX_TIMEOUT_MS,
         );
 
         port.onMessage.addListener((reply) => {
           if (!reply?.ok) {
-            finish(reject, new Error(reply?.error || "Codex request failed"));
+            finish(
+              reject,
+              new Error(reply?.error || `${label} request failed`),
+            );
             return;
           }
 
@@ -56,14 +65,14 @@
             reject,
             new Error(
               /not found|forbidden/i.test(message)
-                ? "Codex bridge is not installed. Run `npm run install-codex-host` in the Tabbit folder, then reload the extension."
-                : message || "Codex bridge closed before answering",
+                ? `${label} bridge is not installed. Run npm run ${install} in the Tabbit folder, then reload the extension.`
+                : message || `${label} bridge closed before answering`,
             ),
           );
         });
 
         try {
-          port.postMessage(buildCodexRequest(messages, settings, task));
+          port.postMessage(buildNativeRequest(messages, settings, task));
         } catch (error) {
           // A port can close between connection and sending. Release its timer
           // and connection just as we do for asynchronous disconnects.
@@ -86,8 +95,8 @@
       task = "selection",
       timeoutMs = null,
     ) {
-      if (settings.provider === "codex") {
-        return requestCodexJson(messages, settings, task, timeoutMs);
+      if (["codex", "claude"].includes(settings.provider)) {
+        return requestNativeJson(messages, settings, task, timeoutMs);
       }
 
       const response = await fetch(OPENAI_API_URL, {
@@ -166,8 +175,8 @@
 
     async function requestGrouping(messages, settings, debug) {
       const requestBody = buildJsonRequest(messages, settings, "grouping");
-      if (settings.provider === "codex") {
-        debug.parsed = await requestCodexJson(
+      if (["codex", "claude"].includes(settings.provider)) {
+        debug.parsed = await requestNativeJson(
           requestBody.messages,
           settings,
           "grouping",
@@ -199,6 +208,11 @@
       return debug.parsed;
     }
 
-    return { requestJson, requestCodexJson, requestGrouping };
+    return {
+      requestJson,
+      requestNativeJson,
+      requestCodexJson: requestNativeJson,
+      requestGrouping,
+    };
   },
 );

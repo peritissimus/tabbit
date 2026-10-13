@@ -80,7 +80,7 @@ function setKeyState(hasKey) {
 }
 
 function renderAiSummary() {
-  const model = state.aiSettings?.model || DEFAULT_AI_MODEL;
+  const model = window.TabbitAiConfig.modelsForProvider(state.aiSettings).model;
   const context = (state.aiSettings?.context || "").trim();
   const trimmedContext = context.length > 36 ? `${context.slice(0, 35).trim()}…` : context;
   elements.aiSummary.textContent = trimmedContext ? `${model} · ${trimmedContext}` : model;
@@ -726,7 +726,7 @@ function buildDebugSnapshot() {
     planSource: state.planSource,
     options: getOptions(),
     settings: {
-      model: state.aiSettings?.model || null,
+      model: window.TabbitAiConfig.modelsForProvider(state.aiSettings).model,
       briefModel: state.aiSettings?.briefModel || null,
       provider: state.aiSettings?.provider || null,
       hasApiKey: Boolean(state.aiSettings?.apiKey),

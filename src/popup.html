@@ -47,7 +47,7 @@
 
         <div id="aiBody" class="ai-body">
           <div class="welcome-note">
-            <p>Tabbit uses OpenAI to group your tabs into clusters. Add your API key, or switch to your Codex subscription, to start.</p>
+            <p>Tabbit uses AI to group your tabs into clusters. Add an OpenAI key, or choose your Codex or Claude subscription, to start.</p>
             <a class="welcome-link" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">Get an API key →</a>
           </div>
           <div class="ai-fields">
@@ -55,6 +55,7 @@
               <span>AI access</span>
               <select id="aiProvider">
                 <option value="openai">OpenAI API key</option>
+                <option value="claude">Claude subscription (local CLI)</option>
                 <option value="codex">Codex subscription (local CLI)</option>
               </select>
             </label>

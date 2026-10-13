@@ -226,8 +226,8 @@
           [BRIEF_KEY]: {
             ...buildBriefFromAi(payload, linked.items),
             createdAt: Date.now(),
-            model: settings.briefModel,
-            selectionModel: settings.model,
+            model: config.modelsForProvider(settings).briefModel,
+            selectionModel: config.modelsForProvider(settings).model,
             sources: readResults.map((page) => ({
               title: page.item.title,
               url: page.item.url,

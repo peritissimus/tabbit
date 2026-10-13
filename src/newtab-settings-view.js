@@ -8,23 +8,43 @@
     const { normalizeAiSettings, MODEL_ROUTING_VERSION } = config;
     const AI_SETTINGS_KEY = keys.aiSettings;
     let savingSettings = false;
+    let draft = normalizeAiSettings();
+    function captureModels() {
+      draft = config.withProviderModels(
+        draft,
+        elements.settingsModel.value,
+        elements.settingsBriefModel.value,
+      );
+    }
+    function changeProvider() {
+      captureModels();
+      draft.provider = elements.settingsProvider.value;
+      const pair = config.modelsForProvider(draft);
+      elements.settingsModel.value = pair.model;
+      elements.settingsBriefModel.value = pair.briefModel;
+      renderSettingsProvider();
+    }
 
     function renderSettingsProvider() {
-      const codex = elements.settingsProvider.value === "codex";
+      const provider = elements.settingsProvider.value;
+      const codex = provider !== "openai";
+      elements.settingsCodexNote.textContent = `Uses the signed-in ${provider === "claude" ? "Claude" : "Codex"} CLI. Run npm run install-${provider}-host once. Subscription usage limits apply.`;
       elements.settingsApiKey.closest("label").hidden = codex;
       elements.settingsCodexNote.hidden = !codex;
     }
 
     function openSettings() {
       const settings = normalizeAiSettings(state.aiSettings || {});
+      draft = settings;
       elements.settingsProvider.value = settings.provider;
       // The saved key is never shown; leaving the field blank keeps it.
       elements.settingsApiKey.value = "";
       elements.settingsApiKey.placeholder = settings.apiKey
         ? "Saved locally"
         : "sk-...";
-      elements.settingsModel.value = settings.model;
-      elements.settingsBriefModel.value = settings.briefModel;
+      elements.settingsModel.value = config.modelsForProvider(settings).model;
+      elements.settingsBriefModel.value =
+        config.modelsForProvider(settings).briefModel;
       elements.settingsContext.value = settings.context;
       elements.settingsError.textContent = "";
       renderSettingsProvider();
@@ -39,14 +59,14 @@
       event.preventDefault();
       if (savingSettings) return;
       elements.settingsError.textContent = "";
+      captureModels();
       const settings = normalizeAiSettings({
+        ...draft,
         provider: elements.settingsProvider.value,
         apiKey:
           elements.settingsApiKey.value.trim() ||
           state.aiSettings?.apiKey ||
           "",
-        model: elements.settingsModel.value,
-        briefModel: elements.settingsBriefModel.value,
         context: elements.settingsContext.value.trim().slice(0, 600),
         modelRoutingVersion: MODEL_ROUTING_VERSION,
       });
@@ -80,10 +100,7 @@
       document
         .querySelector("#settingsForm")
         .addEventListener("submit", saveSettings);
-      elements.settingsProvider.addEventListener(
-        "change",
-        renderSettingsProvider,
-      );
+      elements.settingsProvider.addEventListener("change", changeProvider);
       elements.settingsDialog.addEventListener("cancel", (event) => {
         if (savingSettings) event.preventDefault();
       });

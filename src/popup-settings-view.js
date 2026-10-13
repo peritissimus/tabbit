@@ -40,19 +40,23 @@
       const typedModel = elements.aiModel.value.trim();
       const typedContext = elements.aiContext.value;
 
-      return {
-        provider: elements.aiProvider.value === "codex" ? "codex" : "openai",
-        apiKey: typedApiKey || storedApiKey,
-        model: typedModel || DEFAULT_AI_MODEL,
-        briefModel: elements.aiBriefModel.value.trim() || DEFAULT_BRIEF_MODEL,
-        modelRoutingVersion: MODEL_ROUTING_VERSION,
-        context: typedContext.trim().slice(0, 600),
-      };
+      return config.withProviderModels(
+        {
+          ...state.aiSettings,
+          provider: state.aiSettings.provider,
+          apiKey: typedApiKey || storedApiKey,
+          modelRoutingVersion: MODEL_ROUTING_VERSION,
+          context: typedContext.trim().slice(0, 600),
+        },
+        typedModel,
+        elements.aiBriefModel.value.trim(),
+      );
     }
 
     async function saveAiSettings() {
       const previousHadKey = hasAiAccess(state.aiSettings);
       const nextSettings = readAiSettingsFromForm();
+      nextSettings.provider = elements.aiProvider.value;
       state.aiSettings = nextSettings;
       await chrome.storage.local.set({ [AI_SETTINGS_KEY]: nextSettings });
       renderAiSettings(nextSettings);
@@ -67,13 +71,15 @@
     }
 
     function renderAiSettings(settings) {
-      elements.aiModel.value = settings.model || DEFAULT_AI_MODEL;
-      elements.aiBriefModel.value = settings.briefModel || DEFAULT_BRIEF_MODEL;
+      elements.aiModel.value = config.modelsForProvider(settings).model;
+      elements.aiBriefModel.value =
+        config.modelsForProvider(settings).briefModel;
       elements.aiContext.value = settings.context || "";
       elements.aiProvider.value = settings.provider;
       elements.aiApiKey.closest(".field").hidden =
-        settings.provider === "codex";
-      elements.aiCodexNote.hidden = settings.provider !== "codex";
+        settings.provider !== "openai";
+      elements.aiCodexNote.hidden = settings.provider === "openai";
+      elements.aiCodexNote.textContent = `Uses the signed-in ${settings.provider === "claude" ? "Claude" : "Codex"} CLI. Run npm run install-${settings.provider}-host once. Subscription usage limits apply.`;
       elements.aiApiKey.value = "";
       elements.aiApiKey.placeholder = settings.apiKey
         ? "Saved locally"

@@ -10,10 +10,11 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const HOST_NAME = "dev.tabbit.codex";
+let provider = "codex";
+let HOST_NAME, HOST_SCRIPT, LAUNCHER;
 const ROOT = path.resolve(__dirname, "..");
-const HOST_SCRIPT = path.join(ROOT, "native-host", "codex-host.js");
-const LAUNCHER = path.join(ROOT, "native-host", "run-host.sh");
+
+
 
 // Chrome derives an unpacked extension's id from the folder it was loaded from.
 function unpackedExtensionId(extensionPath) {
@@ -42,16 +43,16 @@ function argument(name) {
 }
 
 function findCodex() {
-  const given = argument("--codex");
+  const given = argument(`--${provider}`);
 
   if (given) {
     return path.resolve(given);
   }
 
   try {
-    return execFileSync("which", ["codex"], { encoding: "utf8" }).trim();
+    return execFileSync("which", [provider], { encoding: "utf8" }).trim();
   } catch (_error) {
-    throw new Error("Could not find the codex CLI on PATH. Install it or pass --codex <path>.");
+    throw new Error(`Could not find ${provider} on PATH. Install it or pass --${provider} <path>.`);
   }
 }
 
@@ -59,13 +60,17 @@ function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function main() {
+function main(selectedProvider = "codex") {
+  provider = selectedProvider;
+  HOST_NAME = `dev.tabbit.${provider}`;
+  HOST_SCRIPT = path.join(ROOT, "native-host", `${provider}-host.js`);
+  LAUNCHER = path.join(ROOT, "native-host", provider === "codex" ? "run-host.sh" : "run-claude-host.sh");
   const browsers = hostDirectories().filter((directory) => fs.existsSync(directory));
   const manifests = browsers.map((directory) => path.join(directory, "NativeMessagingHosts", `${HOST_NAME}.json`));
 
   if (process.argv.includes("--uninstall")) {
     [...manifests, LAUNCHER].forEach((file) => fs.rmSync(file, { force: true }));
-    console.log("Removed the Tabbit Codex host.");
+    console.log(`Removed the Tabbit ${provider} host.`);
     return;
   }
 
@@ -81,14 +86,14 @@ function main() {
   fs.writeFileSync(LAUNCHER, [
     "#!/bin/sh",
     `export PATH=${shellQuote(path.dirname(process.execPath))}:"$PATH"`,
-    `export TABBIT_CODEX_BIN=${shellQuote(codex)}`,
+    `export TABBIT_${provider.toUpperCase()}_BIN=${shellQuote(codex)}`,
     `exec ${shellQuote(process.execPath)} ${shellQuote(HOST_SCRIPT)} "$@"`,
     ""
   ].join("\n"), { mode: 0o755 });
 
   const manifest = JSON.stringify({
     name: HOST_NAME,
-    description: "Tabbit bridge to the local Codex CLI",
+    description: `Tabbit bridge to the local ${provider} CLI`,
     path: LAUNCHER,
     type: "stdio",
     allowed_origins: [`chrome-extension://${extensionId}/`]
@@ -101,8 +106,8 @@ function main() {
   }
 
   console.log(`Extension id: ${extensionId}`);
-  console.log(`Codex CLI:    ${codex}`);
-  console.log("Reload Tabbit in chrome://extensions, then choose Codex subscription in the popup.");
+  console.log(`${provider} CLI:    ${codex}`);
+  console.log(`Reload Tabbit in chrome://extensions, then choose ${provider} subscription in Settings.`);
 }
 
 if (require.main === module) {
@@ -114,4 +119,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { unpackedExtensionId };
+module.exports = { unpackedExtensionId, main };

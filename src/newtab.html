@@ -105,7 +105,7 @@
         <label class="feed-label" for="feedInstructions">What should we look for?</label>
         <textarea id="feedInstructions" rows="5" maxlength="1200" placeholder="Prioritize AI agents, voice AI, developer tools and personal software. Prefer concrete releases and useful new products. Skip funding-only stories."></textarea>
         <label class="feed-auto"><input id="feedAutoRefresh" type="checkbox" /> Refresh every six hours while Chrome is running</label>
-        <p class="feed-help">Builds use your OpenAI key or Codex subscription, whichever is chosen in Settings. A summary of recent browsing on supported developer and news sites, your feedback, and text from selected sources are sent to OpenAI. Some sources open briefly in a minimized window. The previous edition stays available while refreshing.</p>
+        <p class="feed-help">Builds use your OpenAI key, Codex subscription or Claude subscription, whichever is chosen in Settings. A summary of recent browsing on supported developer and news sites, your feedback, and text from selected sources are sent to the selected AI provider. Some sources open briefly in a minimized window. The previous edition stays available while refreshing.</p>
         <p id="feedSettingsError" class="editor-error" role="alert"></p>
         <footer class="editor-footer"><span id="feedFeedbackCount" class="subtle-count"></span><button id="feedCancel" class="ghost-button" type="button">Cancel</button><button id="feedSave" class="primary-button" type="submit">Save instructions</button></footer>
       </form>
@@ -122,6 +122,7 @@
             <span>AI access</span>
             <select id="settingsProvider">
               <option value="openai">OpenAI API key</option>
+              <option value="claude">Claude subscription (local CLI)</option>
               <option value="codex">Codex subscription (local CLI)</option>
             </select>
           </label>

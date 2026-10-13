@@ -3,3 +3,4 @@ node_modules/
 npm-debug.log*
 *.log
 native-host/run-host.sh
+native-host/run-claude-host.sh

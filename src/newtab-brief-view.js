@@ -78,7 +78,7 @@
 
         elements.brief.innerHTML = hasKey
           ? '<div class="empty">Build a brief to see what needs your attention and the work threads you have in flight.</div>'
-          : '<div class="empty">Open Settings to add an OpenAI key or use your Codex subscription, then build an AI brief of your work threads.</div>';
+          : '<div class="empty">Open Settings to add an OpenAI key or use your Codex or Claude subscription, then build an AI brief of your work threads.</div>';
         return;
       }
 

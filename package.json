@@ -10,7 +10,8 @@
     "install-codex-host": "node scripts/install-codex-host.js",
     "test": "node --test tests/*.test.js",
     "validate": "node -e \"JSON.parse(require('node:fs').readFileSync('manifest.json', 'utf8'))\" && npm run check && npm test",
-    "typecheck": "tsc -p jsconfig.json"
+    "typecheck": "tsc -p jsconfig.json",
+    "install-claude-host": "node scripts/install-claude-host.js"
   },
   "devDependencies": {
     "typescript": "5.9.3"
