@@ -316,11 +316,13 @@ function renderBrief() {
   elements.briefButton.disabled = isRunning;
   elements.briefButton.textContent = brief ? "Rebuild" : "Build";
   elements.briefStatus.textContent = buildStatusText();
+  elements.briefStatus.classList.toggle("is-processing", isRunning);
+  elements.brief.setAttribute("aria-busy", String(isRunning));
 
   if (!brief) {
     if (isRunning) {
       elements.brief.innerHTML =
-        '<div class="empty">Building your brief. You can close this tab; it keeps going in the background.</div>';
+        '<div class="loading-lines" aria-hidden="true"><span></span><span></span><span></span></div><div class="empty">Building your brief. You can close this tab; it keeps going in the background.</div>';
       return;
     }
 
