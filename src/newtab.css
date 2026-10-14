@@ -21,9 +21,7 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(ellipse 75vw 620px at 18% -100px, rgba(148, 111, 76, .16), transparent 76%),
-    radial-gradient(ellipse 65vw 700px at 95% 180px, rgba(70, 89, 122, .10), transparent 76%),
-    radial-gradient(ellipse 80vw 500px at 50% 100%, rgba(98, 77, 105, .04), transparent 80%),
+    radial-gradient(ellipse 65vw 75vh at 100% 50%, rgba(255, 255, 255, .10) 0%, rgba(255, 255, 255, .035) 38%, transparent 78%),
     var(--bg);
   background-attachment: fixed;
   color: var(--text);
