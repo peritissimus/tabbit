@@ -271,17 +271,25 @@
         }
         if (![1, -1, 0].includes(message.vote)) throw new Error("Invalid vote");
         const feed = await getStored(FEED_KEY);
-        const item = feed?.items?.find((i) => i.url === message.url);
+        const previous = (await getStored(FEED_FEEDBACK_KEY)) || {};
+        const archived = Object.values(previous).find(i => i.url === message.url);
+        const item = feed?.items?.find((i) => i.url === message.url) || archived;
         if (!item)
           throw new Error(
             "This item is no longer in the current feed. Refresh the page.",
           );
         const feedback = discovery.applyFeedback(
-          (await getStored(FEED_FEEDBACK_KEY)) || {},
+          previous,
           item,
           message.vote,
         );
-        await chrome.storage.local.set({ [FEED_FEEDBACK_KEY]: feedback });
+        const changes = { [FEED_FEEDBACK_KEY]: feedback };
+        // Undo also works after the edition that contained the item was replaced.
+        if (archived && !Object.values(feedback).some(i => i.url === item.url) && !feed?.items?.some(i => i.url === item.url)) {
+          const {vote, updatedAt, ...restored} = archived;
+          changes[FEED_KEY] = {...(feed || {}), items:[restored,...(feed?.items || [])]};
+        }
+        await chrome.storage.local.set(changes);
         return { ok: true };
       };
       const result = feedPreferenceWrite.then(update);

@@ -129,3 +129,12 @@ test('fresh significant releases outrank older higher-impact stories without pro
   assert.equal(rankFeed([item('just-before',30,1.99),item('just-after',31,2.01)],now)[0].id,'just-after','no abrupt 48-hour ranking cliff');
   assert.equal(rankFeed([item('unknown',30,null),item('dated',30,1)],now)[0].id,'dated');
 });
+
+test('seen records retain story snapshots beyond 200 votes and suppress both ratings',()=>{
+ let feedback={};for(let i=0;i<205;i++)feedback=applyFeedback(feedback,{url:`https://example.com/${i}`,title:`Story ${i}`,summary:'Saved summary',kind:'news'},i%2?1:-1,NOW+i);
+ assert.equal(Object.keys(feedback).length,205);
+ const evidence=[{id:1,url:'https://example.com/0',title:'Zero'},{id:2,url:'https://example.com/1',title:'One'},{id:3,url:'https://example.com/new',title:'New update'}];
+ const payload={items:evidence.map(i=>({itemId:i.id,title:i.title,kind:'news'}))};
+ assert.deepEqual(buildFeed(payload,evidence,feedback,NOW).map(i=>i.id),[3]);
+ assert.equal(feedback['https://example.com/0'].summary,'Saved summary');
+});

@@ -134,7 +134,7 @@
       const item = byId.get(Number(entry.itemId));
       if (!item || seen.has(item.url) || !["news", "product"].includes(entry.kind) || !clip(entry.title,100)) continue;
       const key = normalizeUrlForDuplicate(item.url);
-      if (feedback[key]?.vote === -1) continue;
+      if ([1, -1].includes(feedback[key]?.vote)) continue;
       // Structured sources provide exact timestamps. Never promote old links as fresh.
       const published = item.publishedAt ? Date.parse(item.publishedAt) : NaN;
       if (Number.isFinite(published) && (published > now + 86400000 || now - published > (entry.kind === "product" ? 14 : 7) * 86400000)) continue;
@@ -153,8 +153,8 @@
     const next = { ...feedback }, key = normalizeUrlForDuplicate(item.url);
     if (![1,-1,0].includes(vote)) throw new Error("Invalid feedback");
     if (vote === 0 || next[key]?.vote === vote) delete next[key];
-    else next[key] = { url:item.url, title:item.title, topics:item.topics, source:item.source, vote, updatedAt:now };
-    return Object.fromEntries(Object.entries(next).sort((a,b)=>(b[1].updatedAt||0)-(a[1].updatedAt||0)).slice(0,200));
+    else next[key] = { ...item, vote, updatedAt:now };
+    return Object.fromEntries(Object.entries(next).sort((a,b)=>(b[1].updatedAt||0)-(a[1].updatedAt||0)));
   }
   return { SOURCES, browsingProfile, sourceCandidates, selectSources, buildEvidence, buildFeed, assessImpact, rankFeed, feedbackExamples, applyFeedback, publicUrl };
 });

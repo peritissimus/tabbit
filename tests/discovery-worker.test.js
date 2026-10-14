@@ -171,3 +171,20 @@ test('loaded background acknowledges the exact new-tab organization message and 
   assert.equal(calls[0].createProperties.windowId,4);
   assert.deepEqual(Array.from(calls[0].tabIds),[1,2]);
 });
+
+test('both ratings survive editions in Seen and undo restores an archived item',async()=>{
+ const h=harness();await h.run('feed.start()');
+ for(const [url,vote] of [['https://framework.example/',1],['https://tool.example/',-1]])await h.run(`feed.updatePreference({type:'tabbit.feedFeedback',url:${JSON.stringify(url)},vote:${vote}})`);
+ assert.equal(Object.keys(h.storage['tabbit.feedFeedback']).length,2);
+ assert.equal(h.storage['tabbit.feedFeedback']['https://framework.example/'].summary,'New release');
+ await h.run('feed.start()');assert.equal(h.storage['tabbit.feed'].items.length,0);
+ await h.run("feed.updatePreference({type:'tabbit.feedFeedback',url:'https://framework.example/',vote:0})");
+ assert.equal(h.storage['tabbit.feed'].items[0].url,'https://framework.example/');
+ assert.equal(h.storage['tabbit.feedFeedback']['https://framework.example/'],undefined);
+ assert.equal(h.storage['tabbit.feedFeedback']['https://tool.example/'].vote,-1);
+});
+test('legacy feedback can be undone after its original edition has disappeared',async()=>{
+ const h=harness();h.storage['tabbit.feed']={items:[],createdAt:1};h.storage['tabbit.feedFeedback']={'https://old.example/':{url:'https://old.example/',title:'Old story',vote:1,updatedAt:1}};
+ await h.run("feed.updatePreference({type:'tabbit.feedFeedback',url:'https://old.example/',vote:0})");
+ assert.equal(h.storage['tabbit.feed'].items[0].title,'Old story');assert.equal(Object.keys(h.storage['tabbit.feedFeedback']).length,0);
+});
