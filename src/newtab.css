@@ -17,7 +17,13 @@
 html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 body {
   margin: 0;
-  background: var(--bg);
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(128, 98, 68, .16), transparent 52%),
+    radial-gradient(ellipse at 88% 24%, rgba(67, 86, 117, .12), transparent 55%),
+    radial-gradient(ellipse at 50% 100%, rgba(98, 77, 105, .06), transparent 58%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: -0.01em;
