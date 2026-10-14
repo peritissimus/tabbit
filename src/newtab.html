@@ -106,8 +106,8 @@
 
     <dialog id="cleanupDialog" aria-labelledby="cleanupTitle">
       <header class="section-heading"><h2 id="cleanupTitle">A little breathing room</h2><button id="cleanupDismiss" class="ghost-button" type="button">Done</button></header>
-      <p class="cleanup-description">Review tabs in this window before closing them. Pinned, active and playing tabs stay put. A recovery session is saved first; restoring reopens URLs, not unsaved page content.</p>
-      <div class="cleanup-toolbar"><label>Unused for <select id="cleanupDays"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="14">14 days</option><option value="30">30 days</option></select></label><button id="cleanupRefresh" class="ghost-button" type="button">Refresh preview</button></div>
+      <p class="cleanup-description">Review tabs in this window before closing them. AI looks for redundant browsing trails, not old tabs. Distinct PR reviews, pinned, active and playing tabs stay put. A recovery session is saved first; restoring reopens URLs, not unsaved page content.</p>
+      <div class="cleanup-toolbar"><span>AI suggestions · exact duplicates · extra new tabs</span><button id="cleanupRefresh" class="ghost-button" type="button">Analyse again</button></div>
       <div id="cleanupList" class="cleanup-list"></div>
       <p id="cleanupStatus" role="status" aria-live="polite"></p>
       <footer class="editor-footer"><button id="cleanupRestore" class="ghost-button" type="button" hidden>Restore last cleanup</button><button id="cleanupConfirm" class="primary-button" type="button" disabled>Close selected tabs</button></footer>

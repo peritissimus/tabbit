@@ -7,6 +7,7 @@ importScripts(
   "grouping-prompt.js",
   "organization-workflow.js",
   "cleanup-workflow.js",
+  "cleanup-ai.js",
   "workspace.js",
   "discovery.js",
   "storage.js",
@@ -53,7 +54,7 @@ const feed = self.createTabbitFeedWorkflow({
 });
 const grouping = self.createTabbitGroupingWorkflow(dependencies);
 const organization = self.createTabbitOrganizationWorkflow({...dependencies, grouping, organizer:self.TabbitOrganizer, prompt:self.TabbitGroupingPrompt});
-const cleanup = self.createTabbitCleanupWorkflow({chrome, organizer:self.TabbitOrganizer, keys});
+const cleanup = self.createTabbitCleanupWorkflow({chrome, organizer:self.TabbitOrganizer, keys, store, config, ai, cleanupAI:self.TabbitCleanupAI});
 const TICK_ALARM = "tabbit.tick",
   TICK_MINUTES = 30;
 

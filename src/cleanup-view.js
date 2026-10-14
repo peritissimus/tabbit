@@ -39,14 +39,18 @@
   }
   function render() {
     list.replaceChildren();
-    for (const reason of ["Extra new tabs", "Duplicate pages", "Unused tabs"]) {
+    for (const reason of [
+      "AI suggestions",
+      "Extra new tabs",
+      "Duplicate pages",
+    ]) {
       const items = preview.items.filter((item) => item.reason === reason);
       const section = document.createElement("fieldset"),
         legend = document.createElement("legend");
       const label = document.createElement("label"),
         toggle = document.createElement("input");
       toggle.type = "checkbox";
-      toggle.checked = reason !== "Unused tabs" && items.length > 0;
+      toggle.checked = reason !== "AI suggestions" && items.length > 0;
       toggle.disabled = !items.length;
       toggle.dataset.empty = String(!items.length);
       label.append(
@@ -67,7 +71,15 @@
           url = document.createElement("small");
         title.textContent = item.title;
         url.textContent = item.url;
-        copy.append(title, url);
+        const why = document.createElement("p");
+        why.className = "cleanup-reason";
+        why.textContent = item.explanation;
+        copy.append(title, url, why);
+        if (item.replacement) {
+          const keep = document.createElement("small");
+          keep.textContent = `Keep instead: ${item.replacement.title}`;
+          copy.append(keep);
+        }
         row.append(check, copy);
         section.append(row);
         check.addEventListener("change", () => {
@@ -87,16 +99,24 @@
     }
     update();
   }
-  async function refresh() {
+  async function refresh(action = "preview") {
     lock(true);
-    status.textContent = "Checking this window…";
+    status.textContent = "Finding redundant tabs… PR reviews stay protected.";
     try {
-      preview = await send("preview", { days: Number($("cleanupDays").value) });
+      preview = await send(action);
       render();
       restore.hidden = !preview.lastSessionId;
-      status.textContent = preview.items.length
-        ? "Choose what to close. Unused tabs are off by default."
-        : "Nothing to clean up in this window.";
+      status.textContent = [
+        preview.warning,
+        preview.reviewCount
+          ? `${preview.reviewCount} PR/review tabs protected from AI cleanup.`
+          : "",
+        preview.items.length
+          ? "Review the reasons and select what to close. AI suggestions are unchecked."
+          : "No redundant tabs found.",
+      ]
+        .filter(Boolean)
+        .join(" ");
     } catch (error) {
       preview = null;
       list.replaceChildren();
@@ -107,11 +127,11 @@
   }
   $("cleanupTabs").addEventListener("click", () => {
     dialog.showModal();
-    refresh();
+    refresh("load");
   });
   $("cleanupDismiss").addEventListener("click", () => dialog.close());
-  $("cleanupRefresh").addEventListener("click", refresh);
-  $("cleanupDays").addEventListener("change", refresh);
+  $("cleanupRefresh").addEventListener("click", () => refresh());
+
   dialog.addEventListener("cancel", (event) => {
     if (busy) event.preventDefault();
   });

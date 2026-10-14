@@ -35,7 +35,7 @@ function fixture() {
     },
     windows: { create: async (options) => windows.push(options) },
   };
-  const service = create({ chrome, organizer, keys });
+  const service = create({ chrome, organizer, keys, store:{getAiSettings:async()=>({provider:'codex'})}, config:{hasAiAccess:()=>true}, cleanupAI:require('../src/cleanup-ai'),ai:{requestJson:async()=>({suggestions:[{tabId:5,replacementTabId:3,reason:'Overlapping reference entry; keep the current reference tab.'}]})} });
   return {
     service,
     state,
@@ -54,7 +54,7 @@ test("preview partitions candidates and protects active, pinned, audible and dup
     [
       [2, "Extra new tabs"],
       [4, "Duplicate pages"],
-      [5, "Unused tabs"],
+      [5, "AI suggestions"],
     ],
   );
   assert.equal(f.removed.length, 0);

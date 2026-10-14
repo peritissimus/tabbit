@@ -4,7 +4,7 @@
   else root.createTabbitCleanupWorkflow = factory;
 })(
   typeof self !== "undefined" ? self : this,
-  function ({ chrome, organizer, keys }) {
+  function ({ chrome, organizer, keys, store, config, ai, cleanupAI }) {
     const pending = new Map();
     let queue = Promise.resolve();
     const storageKey = (windowId) => `tabbit.cleanup.${windowId}`;
@@ -14,7 +14,7 @@
         chrome.runtime.getURL("src/newtab.html");
     const protectedTab = (tab) =>
       tab.pinned || tab.active || tab.audible || tab.pendingUrl;
-    function candidates(tabs, initiator, days) {
+    function candidates(tabs, initiator) {
       const result = new Map();
       const add = (tab, reason) => {
         if (!protectedTab(tab) && tab.id !== initiator && !result.has(tab.id))
@@ -23,6 +23,10 @@
             title: tab.title || tab.url,
             url: tab.url,
             reason,
+            explanation:
+              reason === "Extra new tabs"
+                ? "Another new-tab page is kept in this window."
+                : "The same URL is open in another tab; keeping the active or most recently used copy.",
           });
       };
       const newTabs = tabs.filter(isNewTab);
@@ -33,18 +37,23 @@
       newTabs
         .filter((t) => t.id !== keep?.id)
         .forEach((t) => add(t, "Extra new tabs"));
-      organizer
-        .findDuplicateTabs(tabs, { includePinned: true })
-        .removableTabs.forEach((t) => add(t, "Duplicate pages"));
-      const keepers = new Set(
-        organizer
-          .findDuplicateTabs(tabs, { includePinned: true })
-          .duplicateSets.map((s) => s.keeper.id),
-      );
-      organizer
-        .findUnusedTabs(tabs, { unusedAfterMs: days * 86400000 })
-        .filter((t) => organizer.isGroupableTab(t) && !keepers.has(t.id))
-        .forEach((t) => add(t, "Unused tabs"));
+      // Exact URLs only: different PR diffs, query states and comment fragments matter.
+      const buckets = new Map();
+      for (const tab of tabs.filter((t) =>
+        organizer.isGroupableTab(t, { includePinned: true }),
+      )) {
+        if (!buckets.has(tab.url)) buckets.set(tab.url, []);
+        buckets.get(tab.url).push(tab);
+      }
+      for (const group of buckets.values()) {
+        group.sort(
+          (a, b) =>
+            Number(Boolean(b.active)) - Number(Boolean(a.active)) ||
+            Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
+            (b.lastAccessed || 0) - (a.lastAccessed || 0),
+        );
+        group.slice(1).forEach((tab) => add(tab, "Duplicate pages"));
+      }
       return [...result.values()];
     }
     async function get(windowId) {
@@ -55,23 +64,81 @@
     async function save(windowId, value) {
       await chrome.storage.local.set({ [storageKey(windowId)]: value });
     }
-    async function preview(windowId, initiator, days = 7) {
-      if (![1, 7, 14, 30].includes(days))
-        throw Error("Choose a supported inactivity threshold.");
+    async function preview(windowId, initiator) {
       const prior = await get(windowId);
+      const tabs = await chrome.tabs.query({ windowId });
       const value = {
         token: crypto.randomUUID(),
         createdAt: Date.now(),
-        days,
-        items: candidates(
-          await chrome.tabs.query({ windowId }),
-          initiator,
-          days,
-        ),
+        status: "running",
+        items: candidates(tabs, initiator),
         lastSessionId: prior?.lastSessionId,
       };
       await save(windowId, value);
-      return value;
+      const keepalive = setInterval(
+        () => chrome.runtime.getPlatformInfo?.(),
+        20000,
+      );
+      try {
+        const settings = store ? await store.getAiSettings() : {};
+        if (config?.hasAiAccess(settings) && cleanupAI && ai) {
+          const result = await cleanupAI.suggest({
+            tabs,
+            settings,
+            ai,
+            organizer,
+          });
+          const duplicateIds = new Set(value.items.map((t) => t.id));
+          // Never close a replacement, even if it was independently a duplicate.
+          const retained = new Set(result.items.map((t) => t.replacement.id));
+          value.items = value.items.filter((t) => !retained.has(t.id));
+          value.items.push(
+            ...result.items.filter(
+              (t) => !duplicateIds.has(t.id) && t.id !== initiator,
+            ),
+          );
+          value.warning = result.warning;
+          value.reviewCount = result.reviewCount;
+        } else
+          value.warning =
+            "Configure an AI provider in Settings for AI cleanup. Showing only extra new tabs and exact duplicates.";
+        value.status = "ready";
+        value.createdAt = Date.now();
+        await save(windowId, value);
+        return value;
+      } finally {
+        clearInterval(keepalive);
+      }
+    }
+    function eligibleItem(item, tabs, initiator, selected) {
+      const live = tabs.find((t) => t.id === item.id);
+      if (
+        !live ||
+        protectedTab(live) ||
+        live.id === initiator ||
+        live.url !== item.url
+      )
+        return false;
+      if (item.reason !== "AI suggestions")
+        return candidates(tabs, initiator).some(
+          (t) => t.id === item.id && t.reason === item.reason,
+        );
+      if (
+        cleanupAI.isReview(live) ||
+        organizer.isLocalhostTab(live) ||
+        live.title !== item.title ||
+        live.lastAccessed !== item.lastAccessed
+      )
+        return false;
+      return (
+        !selected.has(item.replacement.id) &&
+        tabs.some(
+          (t) =>
+            t.id === item.replacement.id &&
+            t.url === item.replacement.url &&
+            !t.pendingUrl,
+        )
+      );
     }
     async function execute(windowId, initiator, message) {
       const preview = await get(windowId);
@@ -83,20 +150,11 @@
         throw Error("This preview expired. Open Clean up again.");
       if (preview.completed) return preview.completed;
       const selected = new Set(Array.isArray(message.ids) ? message.ids : []);
-      const current = candidates(
-        await chrome.tabs.query({ windowId }),
-        initiator,
-        preview.days,
-      );
+      const current = await chrome.tabs.query({ windowId });
       const eligible = preview.items.filter(
         (item) =>
           selected.has(item.id) &&
-          current.some(
-            (t) =>
-              t.id === item.id &&
-              t.url === item.url &&
-              t.reason === item.reason,
-          ),
+          eligibleItem(item, current, initiator, selected),
       );
       if (!eligible.length)
         throw Error(
@@ -128,15 +186,11 @@
           live.url !== item.url
         )
           continue;
-        const stillEligible = candidates(
+        const stillEligible = eligibleItem(
+          item,
           await chrome.tabs.query({ windowId }),
           initiator,
-          preview.days,
-        ).some(
-          (tab) =>
-            tab.id === item.id &&
-            tab.url === item.url &&
-            tab.reason === item.reason,
+          selected,
         );
         if (!stillEligible) continue;
         try {
@@ -166,7 +220,11 @@
         sessionId: session.id,
         error: errors[0] || null,
       };
-      await save(windowId, { ...preview, lastSessionId: closed ? session.id : null, completed });
+      await save(windowId, {
+        ...preview,
+        lastSessionId: closed ? session.id : null,
+        completed,
+      });
       return completed;
     }
     async function restore(windowId) {
@@ -185,16 +243,26 @@
     }
     function run(windowId, initiator, message) {
       if (pending.has(windowId))
-        return Promise.reject(Error("Cleanup is already running."));
-      const job = queue.catch(() => {})
+        return message.action === "load"
+          ? pending.get(windowId).then(() => get(windowId))
+          : Promise.reject(Error("Cleanup is already running."));
+      const job = queue
+        .catch(() => {})
         .then(() =>
-          message.action === "preview"
-            ? preview(windowId, initiator, message.days)
-            : message.action === "close"
-              ? execute(windowId, initiator, message)
-              : message.action === "restore"
-                ? restore(windowId)
-                : get(windowId),
+          message.action === "load"
+            ? get(windowId).then((saved) =>
+                saved?.status === "ready" &&
+                Date.now() - saved.createdAt < 900000
+                  ? { ...saved, items: saved.completed ? [] : saved.items }
+                  : preview(windowId, initiator),
+              )
+            : message.action === "preview"
+              ? preview(windowId, initiator, message.days)
+              : message.action === "close"
+                ? execute(windowId, initiator, message)
+                : message.action === "restore"
+                  ? restore(windowId)
+                  : get(windowId),
         )
         .finally(() => pending.delete(windowId));
       queue = job;
