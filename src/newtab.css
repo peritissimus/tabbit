@@ -12,8 +12,8 @@
   --success: #78d9a0;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --surface-ring: 0 0 0 1px var(--line);
-  --surface-fill: linear-gradient(160deg, rgba(255,255,255,.025), transparent 65%), var(--bg-soft);
-  --surface-depth: inset 0 1px 0 rgba(255,255,255,.045), 0 0 0 1px rgba(255,255,255,.055), 0 6px 18px rgba(0,0,0,.12);
+  --surface-fill: radial-gradient(ellipse at 100% 50%, rgba(255,255,255,.045), transparent 75%), var(--bg-soft);
+  --surface-depth: inset -1px 0 0 rgba(255,255,255,.09), inset 0 1px 0 rgba(255,255,255,.045), 0 0 0 1px rgba(255,255,255,.055), 0 6px 18px rgba(0,0,0,.12);
 }
 * { box-sizing: border-box; }
 html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
@@ -44,7 +44,7 @@ h1 { margin-top: 8px; font-size: clamp(28px, 3vw, 34px); line-height: 1.2; font-
 .search-wrap { width: min(100%, 720px); margin: auto; position: relative; }
 .search {
   width: 100%; min-height: 56px; padding: 14px 80px 14px 20px;
-  background: var(--bg-soft); border: 1px solid var(--line-strong); border-radius: 16px;
+  background: var(--surface-fill); border: 1px solid var(--line-strong); border-radius: 16px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 8px 30px rgba(0,0,0,.16);
   outline: none; transition: border-color 140ms var(--ease), background 140ms var(--ease);
 }
@@ -284,7 +284,7 @@ dialog::backdrop { background: rgba(0,0,0,.72); }
 .top-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
 .ghost-button, .primary-button, .session-action, .icon-button, .clear-search,
 .feed-filters button { border-radius: 999px; }
-.ghost-button { background: var(--bg-soft); padding-inline: 16px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.055), 0 2px 4px rgba(0,0,0,.08); }
+.ghost-button { background: var(--surface-fill); padding-inline: 16px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.055), 0 2px 4px rgba(0,0,0,.08); }
 .top-actions .ghost-button { min-width: 104px; }
 .organization-status { font-size: 12px; color: var(--text-muted); text-wrap: pretty; }
 .organization-status:empty { display: none; }
@@ -329,7 +329,7 @@ dialog::backdrop { background: rgba(0,0,0,.72); }
 }
 .quick-link, .server { transition: background 160ms var(--ease), box-shadow 160ms var(--ease), scale 140ms var(--ease); }
 .quick-link:hover, .server:hover {
-  background: linear-gradient(160deg, rgba(255,255,255,.035), transparent 65%), var(--bg-soft-hover);
+  background: radial-gradient(ellipse at 100% 50%, rgba(255,255,255,.065), transparent 75%), var(--bg-soft-hover);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px rgba(255,255,255,.10), 0 8px 22px rgba(0,0,0,.16);
 }
 .quick-icon { border-radius: 9px; }
