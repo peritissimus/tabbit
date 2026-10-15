@@ -188,3 +188,26 @@ test('legacy feedback can be undone after its original edition has disappeared',
  await h.run("feed.updatePreference({type:'tabbit.feedFeedback',url:'https://old.example/',vote:0})");
  assert.equal(h.storage['tabbit.feed'].items[0].title,'Old story');assert.equal(Object.keys(h.storage['tabbit.feedFeedback']).length,0);
 });
+
+test('work profile informs selection and curation, and Tune feed instructions retain override priority', async () => {
+  const h = harness();
+  const {DEFAULT_WORK_PROFILE} = require('../src/discovery');
+  assert.ok(DEFAULT_WORK_PROFILE.length <= 1200);
+  await h.run('feed.start()');
+  for (const request of h.requests) {
+    assert.ok(request.messages[0].content.includes(DEFAULT_WORK_PROFILE));
+    assert.ok(request.messages[0].content.includes('repeated visits'));
+  }
+  await h.run(`feed.updatePreference({type:'tabbit.feedPreferences', instructions:'Focus on accessible creative tools', autoRefresh:true})`);
+  await h.run('feed.start()');
+  for (const request of h.requests.slice(2)) {
+    assert.ok(request.messages[0].content.includes('Focus on accessible creative tools'));
+    assert.ok(request.messages[0].content.includes(DEFAULT_WORK_PROFILE));
+    assert.ok(request.messages[0].content.includes("override conflicting profile preferences"));
+  }
+  assert.ok(h.requests[3].messages[0].content.includes('Always include fresh official model releases'));
+  await h.run(`feed.updatePreference({type:'tabbit.feedPreferences', instructions:'', autoRefresh:true})`);
+  await h.run('feed.start()');
+  assert.ok(h.requests[4].messages[0].content.includes(DEFAULT_WORK_PROFILE));
+  assert.ok(h.requests[5].messages[0].content.includes(DEFAULT_WORK_PROFILE));
+});

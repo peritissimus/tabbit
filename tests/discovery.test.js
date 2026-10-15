@@ -138,3 +138,21 @@ test('seen records retain story snapshots beyond 200 votes and suppress both rat
  assert.deepEqual(buildFeed(payload,evidence,feedback,NOW).map(i=>i.id),[3]);
  assert.equal(feedback['https://example.com/0'].summary,'Saved summary');
 });
+
+test('official launches lead for seven days without promoting branding or uncertain dates', () => {
+  const {rankFeed} = require('../src/discovery');
+  const item = (id, age, extra = {}) => ({id, impact:{score:0}, publishedAt:age === null ? null : new Date(NOW-age*86400000).toISOString(), ...extra});
+  const launch = {lab:'Anthropic', modelRelease:true};
+  const ordinary = item('direct-work-impact',0,{impact:{score:39}});
+  const items = [ordinary, item('week-launch',7,launch), item('old-launch',8,launch), item('unknown',null,launch), item('future',-1,launch), item('branding',0,{lab:'Anthropic'}), item('nonofficial',0,{modelRelease:true})];
+  const ranked = rankFeed(items,NOW);
+  assert.equal(ranked[0].id,'week-launch');
+  assert.equal(ranked[1].id,'direct-work-impact');
+});
+
+test('official agent launches qualify while partnerships do not', () => {
+  const evidence = ['Introducing a new agent API','Agent partnership'].map((title,i)=>({id:i+1,title,lab:'OpenAI',url:`https://openai.com/news/${i}`,publishedAt:new Date(NOW).toISOString(),evidenceContext:'Introducing an AI agent API, now available to developers for tool execution.'}));
+  const feed = buildFeed({items:evidence.map(i=>({itemId:i.id,kind:'news',title:i.title}))},evidence,{},NOW);
+  assert.equal(feed[0].modelRelease,true);
+  assert.equal(feed[1].modelRelease,false);
+});

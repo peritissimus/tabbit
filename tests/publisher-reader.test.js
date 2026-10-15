@@ -35,7 +35,7 @@ test('fresh official launches lead ordinary high-scoring stories; stale, unknown
   const ordinary = {id:2,url:'https://example.com/tool',title:'Useful tool',evidenceContext:'A useful tool enables automated builds and deployment across all your repositories today.',publishedAt:'2026-10-14T00:00:00Z'};
   const picks = {items:[{itemId:1,title:launch.title,kind:'news'},{itemId:2,title:ordinary.title,kind:'news',impact:{capability:3,relevance:3,actionability:3,breadth:3,confidence:'reported',quote:ordinary.evidenceContext}}]};
   assert.equal(buildFeed(picks,[launch,ordinary],{},now)[0].id,1);
-  for(const override of [{lab:null},{publishedAt:null},{publishedAt:'2026-10-10T16:00:00Z'},{publishedAt:'2026-10-15T00:00:00Z'},{title:'Gemini model tutorial'}]) {
+  for(const override of [{lab:null},{publishedAt:null},{publishedAt:'2026-10-06T16:00:00Z'},{publishedAt:'2026-10-15T00:00:00Z'},{title:'Gemini model tutorial'}]) {
     assert.equal(buildFeed(picks,[{...launch,...override},ordinary],{},now)[0].id,2);
   }
   assert.equal(buildFeed(picks,[launch,ordinary],{[normalizeUrlForDuplicate(launch.url)]:{vote:-1}},now)[0].id,2);

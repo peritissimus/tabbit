@@ -3,6 +3,8 @@
   else root.TabbitDiscovery = factory(root.TabbitWorkspace, root.TabbitOrganizer);
 })(typeof self !== "undefined" ? self : this, function createDiscovery(workspace, organizer) {
   const { normalizeUrlForDuplicate } = organizer;
+  // Editable in Tune feed; derived from the owner-approved work patterns, not private source code.
+  const DEFAULT_WORK_PROFILE = "I build production agents and personal developer tools. Prioritize: reliable coding and voice agents, tool calling, evaluations, grounded answers and repository/PR workflows; local-first AI, embeddings, rerankers, semantic search, transcription and memory-efficient inference; production reliability, durable jobs, queues, permissions, retries, observability and latency/cost improvements; creative browser tools, Three.js/WebGPU, native desktop software, recoverable editing and interface craft. Wearables and glanceable interfaces are occasional interests. Prefer usable capabilities and concrete engineering advances over funding, partnerships, generic tutorials or benchmark-only hype. Explain the connection to a workflow, without claiming I use a product just because it matches these interests.";
   const SOURCES = [
     { title: "Hacker News", url: "https://news.ycombinator.com/", topics: ["engineering", "AI", "startups"] },
     { title: "Show HN", url: "https://news.ycombinator.com/show", topics: ["new products", "developer tools", "personal software"] },
@@ -110,7 +112,7 @@
   function isModelRelease(item) {
     const text = `${item.title}. ${item.evidenceContext || ""}`;
     return Boolean(item.lab && item.evidenceContext &&
-      /\b(model|gemini|gemma|claude|gpt|grok|llama|mistral|embedding)\b/i.test(text) &&
+      /\b(model|gemini|gemma|claude|gpt|grok|llama|mistral|embedding|agent|agents|inference|speech|AI)\b/i.test(text) &&
       /\b(introducing|releasing|launching|released|launched|now available|now access|giving.{0,60}access|comes to)\b/i.test(text) &&
       !/\b(roundup|partnership|funding|rumou?r|reportedly|tutorial)\b/i.test(item.title));
   }
@@ -121,9 +123,9 @@
       // must not receive the same freshness credit as verified recent dates.
       const ageDays = Math.max(0, (now - published) / 86400000);
       const freshness = Number.isFinite(published) ? 1 / (1 + Math.max(0, ageDays - 2) / 3) : 0.6;
-      // Fresh official model launches get a temporary editorial priority, not an
+      // Fresh official AI launches get a seven-day editorial priority, not an
       // inflated impact score. Unknown, future and old dates cannot claim it.
-      const launchPriority = item.modelRelease && published <= now && ageDays <= 2 ? 50 : 0;
+      const launchPriority = item.lab && item.modelRelease && published <= now && ageDays <= 7 ? 50 : 0;
       return launchPriority + (item.impact?.score || 0) * freshness;
     };
     return [...items].sort((a,b) => priority(b) - priority(a) || (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0) || Math.min(b.score || 0,1000) - Math.min(a.score || 0,1000));
@@ -156,5 +158,5 @@
     else next[key] = { ...item, vote, updatedAt:now };
     return Object.fromEntries(Object.entries(next).sort((a,b)=>(b[1].updatedAt||0)-(a[1].updatedAt||0)));
   }
-  return { SOURCES, browsingProfile, sourceCandidates, selectSources, buildEvidence, buildFeed, assessImpact, rankFeed, feedbackExamples, applyFeedback, publicUrl };
+  return { DEFAULT_WORK_PROFILE, SOURCES, browsingProfile, sourceCandidates, selectSources, buildEvidence, buildFeed, assessImpact, rankFeed, feedbackExamples, applyFeedback, publicUrl };
 });

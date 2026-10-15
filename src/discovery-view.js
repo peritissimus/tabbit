@@ -81,7 +81,7 @@
     finally { buttons.forEach(button=>button.disabled=false); }
   });
   $("feedSettingsButton").addEventListener("click",()=>{
-    $("feedInstructions").value=state.prefs.instructions || "";
+    $("feedInstructions").value=state.prefs.instructions || window.TabbitDiscovery.DEFAULT_WORK_PROFILE;
     $("feedAutoRefresh").checked=state.prefs.autoRefresh!==false;
     $("feedFeedbackCount").textContent=`${Object.keys(state.feedback).length} rated items`;
     $("feedSettingsError").textContent=""; $("feedDialog").showModal();
